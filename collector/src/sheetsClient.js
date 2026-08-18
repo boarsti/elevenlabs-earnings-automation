@@ -15,6 +15,7 @@ import { google } from "googleapis";
 const DAILY_SHEET = "Automatisiert";
 const WEEKLY_SHEET = "WeeklyHistory";
 const STATUS_SHEET = "Status";
+const INTRADAY_SHEET = "Intraday";
 
 const DAILY_HEADERS = [
   "Datum",
@@ -32,6 +33,11 @@ const DAILY_HEADERS = [
 ];
 
 const WEEKLY_HEADERS = ["DatumZeit", "DatumIso", "BetragEUR", "Status"];
+
+// Ein Datenpunkt pro Collector-Lauf (alle 10 Minuten), nur die letzten 48h werden
+// behalten (siehe collect.js) - ermoeglicht eine echte Stunden-Kurve fuer "heute vs.
+// gestern" im Dashboard, statt nur des einen Tages-Endwerts aus "Automatisiert".
+const INTRADAY_HEADERS = ["Timestamp", "GesamtwertUSD"];
 
 const STATUS_KEYS = [
   "readoutTimeWeekly",
@@ -62,7 +68,9 @@ export async function ensureTabs(sheets, spreadsheetId) {
   const meta = await sheets.spreadsheets.get({ spreadsheetId });
   const existing = new Set(meta.data.sheets.map((s) => s.properties.title));
 
-  const toCreate = [DAILY_SHEET, WEEKLY_SHEET, STATUS_SHEET].filter((t) => !existing.has(t));
+  const toCreate = [DAILY_SHEET, WEEKLY_SHEET, STATUS_SHEET, INTRADAY_SHEET].filter(
+    (t) => !existing.has(t)
+  );
   if (toCreate.length) {
     await sheets.spreadsheets.batchUpdate({
       spreadsheetId,
@@ -94,10 +102,22 @@ export async function ensureTabs(sheets, spreadsheetId) {
       requestBody: { values: [STATUS_KEYS] },
     });
   }
+  if (!existing.has(INTRADAY_SHEET)) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${INTRADAY_SHEET}!A1`,
+      valueInputOption: "RAW",
+      requestBody: { values: [INTRADAY_HEADERS] },
+    });
+  }
 }
 
 export async function readDailyRows(sheets, spreadsheetId) {
   return readRows(sheets, spreadsheetId, DAILY_SHEET, DAILY_HEADERS);
+}
+
+export async function readIntradayRows(sheets, spreadsheetId) {
+  return readRows(sheets, spreadsheetId, INTRADAY_SHEET, INTRADAY_HEADERS);
 }
 
 export async function readWeeklyRows(sheets, spreadsheetId) {
@@ -210,4 +230,13 @@ export async function writeStatus(sheets, spreadsheetId, statusByKey) {
   });
 }
 
-export { DAILY_HEADERS, WEEKLY_HEADERS, STATUS_KEYS, DAILY_SHEET, WEEKLY_SHEET, STATUS_SHEET };
+export {
+  DAILY_HEADERS,
+  WEEKLY_HEADERS,
+  STATUS_KEYS,
+  INTRADAY_HEADERS,
+  DAILY_SHEET,
+  WEEKLY_SHEET,
+  STATUS_SHEET,
+  INTRADAY_SHEET,
+};

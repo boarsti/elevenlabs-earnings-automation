@@ -17,6 +17,9 @@ import {
   replaceAllRows,
   WEEKLY_HEADERS,
   WEEKLY_SHEET,
+  readIntradayRows,
+  INTRADAY_HEADERS,
+  INTRADAY_SHEET,
   readStatus,
   writeStatus,
 } from "./sheetsClient.js";
@@ -143,6 +146,17 @@ async function main() {
       Status: entry.status,
     }));
   await replaceAllRows(sheets, SPREADSHEET_ID, WEEKLY_SHEET, WEEKLY_HEADERS, weeklyRows);
+
+  // Intraday-Snapshot fuer die "Tag"-Ansicht im Dashboard (echte Stunden-Kurve
+  // heute vs. gestern statt nur des einen Tages-Endwerts). Nur die letzten 48h
+  // werden behalten, damit der Tab nicht unbegrenzt waechst.
+  const existingIntraday = await readIntradayRows(sheets, SPREADSHEET_ID);
+  const cutoffMs = Date.now() - 48 * 60 * 60 * 1000;
+  const keptIntraday = existingIntraday.filter(
+    (r) => r.Timestamp && new Date(r.Timestamp).getTime() >= cutoffMs
+  );
+  keptIntraday.push({ Timestamp: earnings.scrapedAt, GesamtwertUSD: gesamtwertUsd });
+  await replaceAllRows(sheets, SPREADSHEET_ID, INTRADAY_SHEET, INTRADAY_HEADERS, keptIntraday);
 
   await writeStatus(sheets, SPREADSHEET_ID, {
     // Bugfix (18.08.2026): "??" faengt nur null/undefined ab, NICHT einen leeren
