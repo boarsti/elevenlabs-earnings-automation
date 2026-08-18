@@ -27,27 +27,34 @@ struct EarningsTimelineProvider: TimelineProvider {
     }
 }
 
+/// Zeigt exakt die 2 vom Nutzer geforderten Werte: die woechentliche Ablesezeit
+/// (statisch pro Woche) und den Wert seit "gestern dieser Uhrzeit" - Feldnamen und
+/// Label-Logik 1:1 zum HTML-Dashboard (sinceYesterdayUsd / sinceLabel()).
 struct EarningsWidgetView: View {
     var entry: EarningsEntry
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(entry.data.readoutTimeWeekly.isEmpty ? "—" : entry.data.readoutTimeWeekly)
+            Text(formatReadoutDateTime(entry.data.readoutTimeWeekly))
                 .font(.caption).opacity(0.85)
+                .minimumScaleFactor(0.7)
+                .lineLimit(1)
             Spacer()
-            Text(entry.data.sinceReadoutUsd, format: .currency(code: "USD"))
+            Text(fmtUsd(entry.data.sinceYesterdayUsd))
                 .font(.system(size: 30, weight: .bold, design: .rounded))
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
-            Text("seit gestern")
+            Text(sinceLabel(entry.data))
                 .font(.caption2).opacity(0.7)
+                .minimumScaleFactor(0.7)
+                .lineLimit(1)
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .foregroundStyle(.white)
         .containerBackground(for: .widget) {
             LinearGradient(
-                colors: [Color(red: 0.10, green: 0.13, blue: 0.35), Color(red: 0.20, green: 0.05, blue: 0.45)],
+                colors: [Brand.ink, Brand.ink2],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
         }
