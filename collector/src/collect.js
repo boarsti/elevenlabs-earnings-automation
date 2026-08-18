@@ -145,7 +145,10 @@ async function main() {
   await replaceAllRows(sheets, SPREADSHEET_ID, WEEKLY_SHEET, WEEKLY_HEADERS, weeklyRows);
 
   await writeStatus(sheets, SPREADSHEET_ID, {
-    readoutTimeWeekly: isNewWeek ? readoutIso : weekAnchorRow?.Ablesezeit ?? readoutIso,
+    // Bugfix (18.08.2026): "??" faengt nur null/undefined ab, NICHT einen leeren
+    // String - eine (manuell oder durch einen Bug) leere Ablesezeit-Zelle wurde dadurch
+    // 1:1 durchgereicht und hat readoutTimeWeekly geleert. "||" faengt auch "" ab.
+    readoutTimeWeekly: isNewWeek ? readoutIso : weekAnchorRow?.Ablesezeit || readoutIso,
     weekStartBalanceUsd: weekStartBalance,
     currentPeriodUsd: earnings.currentPeriod.amount,
     currentPeriodCurrency: earnings.currentPeriod.currency,
