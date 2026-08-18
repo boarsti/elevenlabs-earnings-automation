@@ -45,21 +45,28 @@ func buildDayCompare(intraday: [EarningsData.IntradayPoint], readoutTimeWeeklyIs
     timeFmt.locale = Locale(identifier: "de_DE")
     timeFmt.dateFormat = "HH:mm"
 
+    // Bugfix (Nutzer-Feedback 18.08.2026): Stunden-Raster war zu grob fuer den
+    // 15-Minuten-Collector-Takt - mehrere Punkte pro Stunde ueberschrieben sich
+    // gegenseitig. 15-Minuten-Raster passt exakt zum Collector-Takt.
+    let slotMin = 15.0
+    let slotSec = slotMin * 60
+    let slotCount = Int(24 * 60 / slotMin) + 1 // 97
+
     func bucket(_ pts: [EarningsData.IntradayPoint], start: Date) -> [Double?] {
-        var arr = [Double?](repeating: nil, count: 25)
+        var arr = [Double?](repeating: nil, count: slotCount)
         for p in pts {
             guard let t = parseIso(p.ts) else { continue }
-            let h = Int((t.timeIntervalSince(start) / 3600).rounded())
-            if h >= 0, h <= 24 { arr[h] = p.usd }
+            let i = Int((t.timeIntervalSince(start) / slotSec).rounded())
+            if i >= 0, i < slotCount { arr[i] = p.usd }
         }
         return arr
     }
     let thisValues = bucket(thisWindow, start: windowStart)
-    let lastValues = lastWindow.isEmpty ? [Double?](repeating: nil, count: 25) : bucket(lastWindow, start: prevWindowStart)
+    let lastValues = lastWindow.isEmpty ? [Double?](repeating: nil, count: slotCount) : bucket(lastWindow, start: prevWindowStart)
     let hasLast = !lastWindow.isEmpty
 
-    let labels = (0...24).map { h in timeFmt.string(from: windowStart.addingTimeInterval(Double(h) * 3600)) }
-    let points = (0..<25).map { i in
+    let labels = (0..<slotCount).map { i in timeFmt.string(from: windowStart.addingTimeInterval(Double(i) * slotSec)) }
+    let points = (0..<slotCount).map { i in
         ComparePoint(id: i, label: labels[i], thisValue: thisValues[i], lastValue: hasLast ? lastValues[i] : nil)
     }
     return CompareSeries(points: points, thisLabel: "Heute (ab Ablesezeit)", lastLabel: "Vortag (gleicher Zeitraum)")

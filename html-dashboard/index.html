@@ -362,17 +362,24 @@ function buildDayCompare(intraday, readoutTimeWeeklyIso) {
   const thisWindow = pointsInWindow(windowStart);
   const lastWindow = pointsInWindow(prevWindowStart);
 
-  const labels = Array.from({ length: 25 }, (_, h) =>
-    new Date(windowStart + h * 60 * 60 * 1000).toLocaleTimeString("de-DE", {
+  // Bugfix (Nutzer-Feedback 18.08.2026, "ich sehe nur 3 Datenpunkte"): Stunden-Raster
+  // (25 Slots) war zu grob fuer den 15-Minuten-Collector-Takt - mehrere Punkte pro
+  // Stunde rundeten auf denselben Slot und ueberschrieben sich gegenseitig. 15-Minuten-
+  // Raster (97 Slots) passt exakt zum Collector-Takt, keine Kollisionen mehr.
+  const SLOT_MIN = 15;
+  const SLOT_MS = SLOT_MIN * 60 * 1000;
+  const SLOT_COUNT = (24 * 60) / SLOT_MIN + 1; // 97
+  const labels = Array.from({ length: SLOT_COUNT }, (_, i) =>
+    new Date(windowStart + i * SLOT_MS).toLocaleTimeString("de-DE", {
       hour: "2-digit",
       minute: "2-digit",
     })
   );
   const bucketByOffset = (pts, start) => {
-    const arr = Array(25).fill(null);
+    const arr = Array(SLOT_COUNT).fill(null);
     pts.forEach((p) => {
-      const h = Math.round((new Date(p.ts).getTime() - start) / (60 * 60 * 1000));
-      if (h >= 0 && h <= 24) arr[h] = p.usd;
+      const i = Math.round((new Date(p.ts).getTime() - start) / SLOT_MS);
+      if (i >= 0 && i < SLOT_COUNT) arr[i] = p.usd;
     });
     return arr;
   };
