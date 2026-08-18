@@ -2,9 +2,11 @@ name: ElevenLabs Earnings Collector
 
 on:
   schedule:
-    # Ziel: alle 10 Minuten. GitHub garantiert keine exakte Taktung
-    # (siehe Design-Doku, Abschnitt "Bekannte Risiken").
-    - cron: "*/10 * * * *"
+    # Ziel: alle 15 Minuten. GitHub garantiert keine exakte Taktung, aber bei
+    # 10-Minuten-Intervallen fielen ueber laengere Zeitraeume fast alle
+    # planmaessigen Laeufe aus (siehe Design-Doku, Abschnitt "Bekannte Risiken",
+    # Beobachtung 18.08.2026: keine "schedule"-Laeufe zwischen 17:14 und 18:36 Uhr).
+    - cron: "*/15 * * * *"
   workflow_dispatch: {} # manueller Start zum Testen ueber den "Actions"-Tab
 
 jobs:
