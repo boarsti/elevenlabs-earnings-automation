@@ -99,10 +99,12 @@
       <div class="card p-5 text-center">
         <p class="text-xs muted mb-1 font-medium">Diese Woche</p>
         <p id="thisWeekUsd" class="text-4xl font-display font-black font-num">$0.00</p>
+        <p id="thisWeekUsdPrev" class="text-xs muted font-num mt-1">&nbsp;</p>
       </div>
       <div class="card p-5 text-center">
         <p class="text-xs muted mb-1 font-medium">Ø pro Tag (diese Woche)</p>
         <p id="avgDaily" class="text-4xl font-display font-black font-num">$0.00</p>
+        <p id="avgDailyPrev" class="text-xs muted font-num mt-1">&nbsp;</p>
       </div>
     </section>
 
@@ -127,15 +129,12 @@
     <section class="card p-4">
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h2 class="font-display font-bold">Verlauf</h2>
-        <div class="flex gap-2 text-sm items-center">
-          <button data-range="daily" class="range-btn px-3 py-1 rounded-full">Tag</button>
-          <button data-range="weekly" class="range-btn px-3 py-1 rounded-full bg-amber text-white">Woche</button>
+        <div class="flex gap-2 text-sm items-center flex-wrap">
+          <button data-range="daily" class="range-btn px-3 py-1 rounded-full bg-amber text-white">Tag</button>
+          <button data-range="weekly" class="range-btn px-3 py-1 rounded-full">Woche</button>
           <button data-range="monthly" class="range-btn px-3 py-1 rounded-full">Monat</button>
           <button data-range="yearly" class="range-btn px-3 py-1 rounded-full">Jahr</button>
-          <span class="opacity-30 mx-1">|</span>
-          <button id="compareToggle" class="px-3 py-1 rounded-full text-xs border border-current opacity-40" disabled>
-            Vergleich
-          </button>
+          <button data-range="total" class="range-btn px-3 py-1 rounded-full">Gesamt</button>
         </div>
       </div>
       <canvas id="historyChart" height="90"></canvas>
@@ -145,7 +144,7 @@
       <h2 class="font-display font-bold mb-3">Letzte Auszahlungen</h2>
       <table class="w-full text-sm">
         <thead class="muted text-left">
-          <tr><th class="py-1">Woche ab</th><th>EUR</th></tr>
+          <tr><th class="py-1">Woche ab</th><th>EUR</th><th>Status</th></tr>
         </thead>
         <tbody id="historyTableBody"></tbody>
       </table>
@@ -171,8 +170,9 @@ async function fetchData() {
   return data;
 }
 
-function fmtUsd(n) { return `$${Number(n ?? 0).toFixed(2)}`; }
-function fmtEur(n) { return `€${Number(n ?? 0).toFixed(2)}`; }
+const deNumberFmt = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function fmtUsd(n) { return `$${deNumberFmt.format(Number(n ?? 0))}`; }
+function fmtEur(n) { return `€${deNumberFmt.format(Number(n ?? 0))}`; }
 function fmtDateTime(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -207,6 +207,14 @@ function render(data) {
   document.getElementById("sinceYesterday").textContent = fmtUsd(data.sinceYesterdayUsd);
   document.getElementById("thisWeekUsd").textContent = fmtUsd(data.thisWeekUsdNet);
   document.getElementById("avgDaily").textContent = fmtUsd(data.avgDailyUsd);
+  document.getElementById("thisWeekUsdPrev").textContent =
+    data.lastWeekUsdSameOffset !== null && data.lastWeekUsdSameOffset !== undefined
+      ? `Vorwoche: ${fmtUsd(data.lastWeekUsdSameOffset)}`
+      : " ";
+  document.getElementById("avgDailyPrev").textContent =
+    data.lastWeekAvgDailyUsd !== null && data.lastWeekAvgDailyUsd !== undefined
+      ? `Vorwoche: ${fmtUsd(data.lastWeekAvgDailyUsd)}`
+      : " ";
 
   document.getElementById("thisWeekEur").textContent = fmtEur(data.thisWeekEur);
   document.getElementById("rollingMonthEur").textContent = fmtEur(data.rollingMonthEur);
@@ -227,15 +235,17 @@ function render(data) {
     : "—";
 
   const tbody = document.getElementById("historyTableBody");
-  tbody.innerHTML = weekly.slice(-10).reverse().map(w =>
-    `<tr class="border-t" style="border-color:var(--card-border)"><td class="py-1">${fmtDateTime(w.weekStart)}</td><td>${fmtEur(w.eur)}</td></tr>`
-  ).join("");
+  tbody.innerHTML = weekly.slice(-10).reverse().map(w => {
+    const paid = w.status === "Paid";
+    const statusLabel = paid ? "Ausgezahlt" : w.status === "Pending" ? "Ausstehend" : (w.status || "—");
+    const statusColor = paid ? "#3FBF6F" : "#B35A0A";
+    return `<tr class="border-t" style="border-color:var(--card-border)"><td class="py-1">${fmtDateTime(w.weekStart)}</td><td>${fmtEur(w.eur)}</td><td style="color:${statusColor}">${statusLabel}</td></tr>`;
+  }).join("");
 
   updateChart(currentRange);
 }
 
-let currentRange = "weekly";
-let compareMode = "off"; // "off" | "week" | "month" - siehe cycleCompare()
+let currentRange = "daily";
 
 // Montag-verankerter ISO-Wochenschluessel ("YYYY-MM-DD" des Wochenmontags) - rein
 // kalendarisch, unabhaengig vom ElevenLabs-Ablesezeitpunkt (fuer die visuelle
@@ -245,6 +255,35 @@ function isoWeekKey(dateStr) {
   const dayOffset = (d.getUTCDay() + 6) % 7; // Mo=0 ... So=6
   d.setUTCDate(d.getUTCDate() - dayOffset);
   return d.toISOString().slice(0, 10);
+}
+
+// "Tag": echte Stunden-Kurve heute vs. gestern aus den Intraday-Snapshots (alle
+// 10 Minuten, siehe collect.js). Solange die Erfassung noch keine 2 Kalendertage
+// abdeckt, liefert dies null (Feature ist neu, Historie waechst erst).
+function buildDayCompare(intraday) {
+  if (!intraday.length) return null;
+  const byDate = {};
+  intraday.forEach((p) => {
+    const dateKey = new Date(p.ts).toISOString().slice(0, 10);
+    (byDate[dateKey] = byDate[dateKey] || []).push(p);
+  });
+  const dateKeys = Object.keys(byDate).sort();
+  if (dateKeys.length < 2) return null;
+  const today = byDate[dateKeys[dateKeys.length - 1]];
+  const yesterday = byDate[dateKeys[dateKeys.length - 2]];
+  const hourLabels = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, "0")}:00`);
+  const bucketByHour = (pts) => {
+    const arr = Array(24).fill(null);
+    pts.forEach((p) => (arr[new Date(p.ts).getHours()] = p.usd));
+    return arr;
+  };
+  return {
+    labels: hourLabels,
+    thisValues: bucketByHour(today),
+    lastValues: bucketByHour(yesterday),
+    thisLabel: "Heute",
+    lastLabel: "Gestern",
+  };
 }
 
 function buildWeekCompare(daily) {
@@ -288,14 +327,26 @@ function buildMonthCompare(daily) {
   };
 }
 
-function cycleCompare() {
-  compareMode = compareMode === "off" ? "week" : compareMode === "week" ? "month" : "off";
-  const btn = document.getElementById("compareToggle");
-  const labels = { off: "Vergleich", week: "Vergleich: Woche ⇄ Vorwoche", month: "Vergleich: Monat ⇄ Vormonat" };
-  btn.textContent = labels[compareMode];
-  btn.classList.toggle("bg-brand", compareMode !== "off");
-  btn.classList.toggle("text-white", compareMode !== "off");
-  updateChart(currentRange);
+// "Jahr": Monatswerte (EUR, aus den woechentlichen Auszahlungen aggregiert) dieses
+// Jahr vs. Vorjahr, Jan-Dez nebeneinander.
+function buildYearCompare(monthly) {
+  const byYear = {};
+  monthly.forEach((m) => {
+    const [y, mm] = m.month.split("-");
+    (byYear[y] = byYear[y] || {})[Number(mm)] = m.eur;
+  });
+  const years = Object.keys(byYear).sort();
+  if (years.length < 2) return null;
+  const thisYear = years[years.length - 1];
+  const lastYear = years[years.length - 2];
+  const monthNames = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+  return {
+    labels: monthNames,
+    thisValues: monthNames.map((_, i) => byYear[thisYear]?.[i + 1] ?? null),
+    lastValues: monthNames.map((_, i) => byYear[lastYear]?.[i + 1] ?? null),
+    thisLabel: thisYear,
+    lastLabel: lastYear,
+  };
 }
 
 function updateChart(range) {
@@ -307,61 +358,86 @@ function updateChart(range) {
     b.classList.toggle("text-white", active);
   });
 
-  const compareBtn = document.getElementById("compareToggle");
-  const canCompare = range === "daily";
-  compareBtn.disabled = !canCompare;
-  compareBtn.classList.toggle("opacity-40", !canCompare);
-  if (!canCompare) compareMode = "off";
+  let labels, datasets, chartType;
 
-  const series = latestData.history?.[range] ?? [];
-  let labels, datasets;
-
-  const cmp =
-    canCompare && compareMode === "week"
-      ? buildWeekCompare(series)
-      : canCompare && compareMode === "month"
-      ? buildMonthCompare(series)
-      : null;
-
-  if (cmp) {
-    labels = cmp.labels;
+  if (range === "total") {
+    // "Gesamt": voller Verlauf seit Beginn der Aufzeichnung, ohne Vergleichslinie.
+    const series = latestData.history?.weekly ?? [];
+    labels = series.map((p) => (p.weekStart || "").slice(0, 10));
     datasets = [
       {
-        label: cmp.thisLabel,
-        data: cmp.thisValues,
+        data: series.map((p) => p.eur ?? 0),
         borderColor: "#3355FF",
         backgroundColor: "#3355FF",
         tension: 0.3,
         fill: false,
-        spanGaps: true,
-      },
-      {
-        label: cmp.lastLabel,
-        data: cmp.lastValues,
-        borderColor: "rgba(16,23,58,0.35)",
-        backgroundColor: "rgba(16,23,58,0.35)",
-        borderDash: [4, 4],
-        tension: 0.3,
-        fill: false,
-        spanGaps: true,
       },
     ];
+    chartType = "line";
   } else {
-    labels = series.map((p) => fmtSeriesLabel(p, range));
-    datasets = [
-      {
-        data: series.map((p) => p.usd ?? p.eur ?? 0),
-        borderColor: "#3355FF",
-        backgroundColor: "#3355FF",
-        tension: 0.3,
-        fill: false,
-      },
-    ];
+    const cmp =
+      range === "daily"
+        ? buildDayCompare(latestData.history?.intraday ?? [])
+        : range === "weekly"
+        ? buildWeekCompare(latestData.history?.daily ?? [])
+        : range === "monthly"
+        ? buildMonthCompare(latestData.history?.daily ?? [])
+        : buildYearCompare(latestData.history?.monthly ?? []);
+
+    if (cmp) {
+      labels = cmp.labels;
+      datasets = [
+        {
+          label: cmp.thisLabel,
+          data: cmp.thisValues,
+          borderColor: "#3355FF",
+          backgroundColor: "#3355FF",
+          tension: 0.3,
+          fill: false,
+          spanGaps: true,
+        },
+        {
+          label: cmp.lastLabel,
+          data: cmp.lastValues,
+          borderColor: "rgba(16,23,58,0.35)",
+          backgroundColor: "rgba(16,23,58,0.35)",
+          borderDash: [4, 4],
+          tension: 0.3,
+          fill: false,
+          spanGaps: true,
+        },
+      ];
+    } else {
+      // Fallback, solange fuer den Vergleich noch nicht genug Historie vorliegt
+      // (z.B. "Tag" direkt nach Einfuehrung der Intraday-Erfassung).
+      const fallback =
+        range === "daily"
+          ? (latestData.history?.intraday ?? []).map((p) => ({
+              label: new Date(p.ts).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }),
+              v: p.usd,
+            }))
+          : range === "weekly"
+          ? (latestData.history?.daily ?? []).slice(-7).map((p) => ({ label: p.date, v: p.usd }))
+          : range === "monthly"
+          ? (latestData.history?.daily ?? []).slice(-31).map((p) => ({ label: p.date, v: p.usd }))
+          : (latestData.history?.yearly ?? []).map((p) => ({ label: p.year, v: p.eur }));
+      labels = fallback.map((p) => p.label);
+      datasets = [
+        {
+          data: fallback.map((p) => p.v),
+          borderColor: "#3355FF",
+          backgroundColor: "#3355FF",
+          tension: 0.3,
+          fill: false,
+        },
+      ];
+    }
+    chartType = "line";
   }
 
   if (chart) chart.destroy();
   chart = new Chart(document.getElementById("historyChart"), {
-    type: range === "yearly" || range === "monthly" ? "bar" : "line",
+    type: chartType,
     data: { labels, datasets },
     options: {
       plugins: { legend: { display: datasets.length > 1 } },
@@ -370,18 +446,9 @@ function updateChart(range) {
   });
 }
 
-function fmtSeriesLabel(p, range) {
-  if (range === "daily") return p.date;
-  if (range === "weekly") return (p.weekStart || "").slice(0, 10);
-  if (range === "monthly") return p.month;
-  if (range === "yearly") return p.year;
-  return "";
-}
-
 document.querySelectorAll(".range-btn").forEach((b) =>
   b.addEventListener("click", () => updateChart(b.dataset.range))
 );
-document.getElementById("compareToggle").addEventListener("click", cycleCompare);
 
 async function tick() {
   try {
