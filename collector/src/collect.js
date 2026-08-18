@@ -63,14 +63,14 @@ async function main() {
     ? null
     : [...sortedRows].reverse().find((r) => r.Anfangsguthaben_USD !== "");
 
-  // Bugfix (18.08.2026): ElevenLabs' "Current Period"-Zaehler startet nachweislich bei
-  // (nahe) 0, sobald eine neue Woche beginnt (verifiziert anhand der Tages-Historie:
-  // nach jedem woechentlichen Readout faellt GesamtwertUSD auf einen kleinen Betrag
-  // zurueck). Der alte Code nahm faelschlich den AKTUELLEN currentPeriod.amount als
-  // Startguthaben - das ist der Stand JETZT, nicht der Stand bei Periodenbeginn, und
-  // fuehrte dazu, dass WochenumsatzUSD/DurchschnittUSD_Woche immer 0 ergaben.
+  // KEIN Reset auf 0 (Korrektur 18.08.2026, siehe Nutzer-Feedback): ElevenLabs' "Current
+  // Period"-Zaehler faellt bei einem woechentlichen Rollover NICHT zuverlaessig auf 0
+  // zurueck, sondern kann ein Restguthaben aus der Vorperiode uebernehmen (am 18.08.2026
+  // z.B. ca. $60 statt $0 - vom Nutzer per manueller Beobachtung bestaetigt). Deshalb wird
+  // beim Rollover-Lauf der tatsaechlich ABGELESENE currentPeriod.amount als Startguthaben
+  // uebernommen (Momentaufnahme direkt beim Rollover-Run) - nicht geraten/angenommen.
   const weekStartBalance = isNewWeek
-    ? 0
+    ? earnings.currentPeriod.amount
     : Number(weekAnchorRow?.Anfangsguthaben_USD ?? 0);
 
   const weekAnchorDate = isNewWeek ? today : weekAnchorRow?.Datum ?? today;
