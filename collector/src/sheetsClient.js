@@ -129,6 +129,11 @@ async function readRows(sheets, spreadsheetId, sheetName, headers) {
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range: `${sheetName}!A2:${lastCol}100000`,
+    // Bugfix (18.08.2026): ohne dies liefert die API den LOKAL-FORMATIERTEN Anzeigewert
+    // ("87,18" mit Komma) statt der Rohzahl. Bei jedem Lauf, der bestehende Zeilen liest
+    // und unveraendert zurueckschreibt (z.B. Intraday-Verlauf), kippten Zahlen dadurch
+    // schleichend in Text um (Number("87,18") ist NaN) - betraf u.a. die Tag-Chart-Werte.
+    valueRenderOption: "UNFORMATTED_VALUE",
   });
   const rows = res.data.values || [];
   return rows.map((r) => Object.fromEntries(headers.map((h, i) => [h, r[i] ?? ""])));
@@ -215,6 +220,7 @@ export async function readStatus(sheets, spreadsheetId) {
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range: `${STATUS_SHEET}!A2:${String.fromCharCode(64 + STATUS_KEYS.length)}2`,
+    valueRenderOption: "UNFORMATTED_VALUE", // siehe Bugfix-Kommentar in readRows()
   });
   const row = (res.data.values || [])[0] || [];
   return Object.fromEntries(STATUS_KEYS.map((k, i) => [k, row[i] ?? ""]));
