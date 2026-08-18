@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "login": "node src/login.js",
-    "collect": "node src/collect.js"
+    "collect": "node src/collect.js",
+    "backfill": "node src/backfillDaily.js"
   },
   "dependencies": {
     "googleapis": "^144.0.0",

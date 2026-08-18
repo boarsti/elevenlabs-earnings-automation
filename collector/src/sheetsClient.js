@@ -2,15 +2,18 @@
 //
 // WICHTIGE DESIGN-ENTSCHEIDUNG (autonom getroffen, siehe README):
 // Der Collector schreibt NICHT in die bestehende, geschützte "ab 2.2025"-Tabelle
-// (die bleibt unangetastet als dein manuelles Original-Archiv), sondern in zwei
+// (die bleibt unangetastet als dein manuelles Original-Archiv), sondern in DREI
 // NEUE, eigene Tabs innerhalb derselben Spreadsheet-Datei:
-//   - "Automatisiert": ein Tagesdatensatz pro Zeile (Historie für Charts)
+//   - "Automatisiert":  ein Tagesdatensatz pro Zeile (Tages-Historie für Charts)
+//   - "WeeklyHistory":  die VOLLSTÄNDIGE Wochen-Historie, 1:1 aus ElevenLabs'
+//                       eigener "History"-Tabelle übernommen (reicht bis Feb 2025 zurück)
 //   - "Status":         eine einzelne "Live-Snapshot"-Zeile (für die Bridge/App)
 // So kann nichts an deiner bestehenden, geschützten Original-Tabelle kaputtgehen.
 
 import { google } from "googleapis";
 
 const DAILY_SHEET = "Automatisiert";
+const WEEKLY_SHEET = "WeeklyHistory";
 const STATUS_SHEET = "Status";
 
 const DAILY_HEADERS = [
@@ -27,6 +30,8 @@ const DAILY_HEADERS = [
   "RollierendeMonatssummeEUR",
   "AvgEUR_ProTag_Monat",
 ];
+
+const WEEKLY_HEADERS = ["DatumZeit", "DatumIso", "BetragEUR", "Status"];
 
 const STATUS_KEYS = [
   "readoutTimeWeekly",
@@ -57,15 +62,12 @@ export async function ensureTabs(sheets, spreadsheetId) {
   const meta = await sheets.spreadsheets.get({ spreadsheetId });
   const existing = new Set(meta.data.sheets.map((s) => s.properties.title));
 
-  const requests = [];
-  if (!existing.has(DAILY_SHEET)) {
-    requests.push({ addSheet: { properties: { title: DAILY_SHEET } } });
-  }
-  if (!existing.has(STATUS_SHEET)) {
-    requests.push({ addSheet: { properties: { title: STATUS_SHEET } } });
-  }
-  if (requests.length) {
-    await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } });
+  const toCreate = [DAILY_SHEET, WEEKLY_SHEET, STATUS_SHEET].filter((t) => !existing.has(t));
+  if (toCreate.length) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests: toCreate.map((title) => ({ addSheet: { properties: { title } } })) },
+    });
   }
 
   if (!existing.has(DAILY_SHEET)) {
@@ -74,6 +76,14 @@ export async function ensureTabs(sheets, spreadsheetId) {
       range: `${DAILY_SHEET}!A1`,
       valueInputOption: "RAW",
       requestBody: { values: [DAILY_HEADERS] },
+    });
+  }
+  if (!existing.has(WEEKLY_SHEET)) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${WEEKLY_SHEET}!A1`,
+      valueInputOption: "RAW",
+      requestBody: { values: [WEEKLY_HEADERS] },
     });
   }
   if (!existing.has(STATUS_SHEET)) {
@@ -87,31 +97,40 @@ export async function ensureTabs(sheets, spreadsheetId) {
 }
 
 export async function readDailyRows(sheets, spreadsheetId) {
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `${DAILY_SHEET}!A2:M100000`,
-  });
-  const rows = res.data.values || [];
-  return rows.map((r) => Object.fromEntries(DAILY_HEADERS.map((h, i) => [h, r[i] ?? ""])));
+  return readRows(sheets, spreadsheetId, DAILY_SHEET, DAILY_HEADERS);
 }
 
-// Schreibt (oder überschreibt) die Zeile für ein gegebenes Datum (YYYY-MM-DD).
-// Sucht die Zeile anhand von Spalte A; hängt an, falls Datum noch nicht vorhanden.
-export async function upsertDailyRow(sheets, spreadsheetId, rowValuesByHeader) {
+export async function readWeeklyRows(sheets, spreadsheetId) {
+  return readRows(sheets, spreadsheetId, WEEKLY_SHEET, WEEKLY_HEADERS);
+}
+
+async function readRows(sheets, spreadsheetId, sheetName, headers) {
+  const lastCol = String.fromCharCode(64 + headers.length);
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${DAILY_SHEET}!A2:A100000`,
+    range: `${sheetName}!A2:${lastCol}100000`,
   });
-  const dates = (res.data.values || []).map((r) => r[0]);
-  const targetDate = rowValuesByHeader["Datum"];
-  const rowIndex = dates.indexOf(targetDate); // 0-basiert relativ zu A2
+  const rows = res.data.values || [];
+  return rows.map((r) => Object.fromEntries(headers.map((h, i) => [h, r[i] ?? ""])));
+}
 
-  const values = [DAILY_HEADERS.map((h) => rowValuesByHeader[h] ?? "")];
+// Schreibt (oder überschreibt) eine Zeile anhand ihres Schlüssels in Spalte A.
+// Hängt an, falls der Schlüssel noch nicht vorhanden ist.
+export async function upsertRow(sheets, spreadsheetId, sheetName, headers, keyHeader, rowValuesByHeader) {
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${sheetName}!A2:A100000`,
+  });
+  const keys = (res.data.values || []).map((r) => r[0]);
+  const targetKey = rowValuesByHeader[keyHeader];
+  const rowIndex = keys.indexOf(targetKey); // 0-basiert relativ zu Zeile 2
+
+  const values = [headers.map((h) => rowValuesByHeader[h] ?? "")];
 
   if (rowIndex === -1) {
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: `${DAILY_SHEET}!A2`,
+      range: `${sheetName}!A2`,
       valueInputOption: "RAW",
       insertDataOption: "INSERT_ROWS",
       requestBody: { values },
@@ -120,11 +139,47 @@ export async function upsertDailyRow(sheets, spreadsheetId, rowValuesByHeader) {
     const sheetRow = rowIndex + 2; // +1 fuer Header, +1 fuer 1-basierten Index
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `${DAILY_SHEET}!A${sheetRow}`,
+      range: `${sheetName}!A${sheetRow}`,
       valueInputOption: "RAW",
       requestBody: { values },
     });
   }
+}
+
+export async function upsertDailyRow(sheets, spreadsheetId, rowValuesByHeader) {
+  return upsertRow(sheets, spreadsheetId, DAILY_SHEET, DAILY_HEADERS, "Datum", rowValuesByHeader);
+}
+
+// Ersetzt den gesamten Inhalt eines Tabs in EINEM API-Call (statt vieler einzelner
+// Upserts). Wichtig fuer WeeklyHistory: ein Upsert pro Zeile (75+ Eintraege) hat
+// live das Sheets-API-Ratenlimit gesprengt (429 "Quota exceeded"), siehe Design-Doku.
+export async function replaceAllRows(sheets, spreadsheetId, sheetName, headers, rowsOfValuesByHeader) {
+  const values = rowsOfValuesByHeader.map((row) => headers.map((h) => row[h] ?? ""));
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId,
+    range: `${sheetName}!A2:${String.fromCharCode(64 + headers.length)}100000`,
+  });
+  if (!values.length) return;
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${sheetName}!A2`,
+    valueInputOption: "RAW",
+    requestBody: { values },
+  });
+}
+
+// Batch-Variante fuer den einmaligen Backfill (schreibt viele Zeilen in einem API-Call
+// statt vieler einzelner upserts - deutlich schneller und schont das API-Rate-Limit).
+export async function appendRows(sheets, spreadsheetId, sheetName, headers, rowsOfValuesByHeader) {
+  const values = rowsOfValuesByHeader.map((row) => headers.map((h) => row[h] ?? ""));
+  if (!values.length) return;
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: `${sheetName}!A2`,
+    valueInputOption: "RAW",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: { values },
+  });
 }
 
 export async function readStatus(sheets, spreadsheetId) {
@@ -146,4 +201,4 @@ export async function writeStatus(sheets, spreadsheetId, statusByKey) {
   });
 }
 
-export { DAILY_HEADERS, STATUS_KEYS, DAILY_SHEET, STATUS_SHEET };
+export { DAILY_HEADERS, WEEKLY_HEADERS, STATUS_KEYS, DAILY_SHEET, WEEKLY_SHEET, STATUS_SHEET };

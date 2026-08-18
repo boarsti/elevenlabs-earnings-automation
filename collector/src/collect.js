@@ -1,7 +1,9 @@
 // Haupt-Collector. Läuft alle 10 Minuten via GitHub Actions (siehe
 // .github/workflows/collect.yml). Liest ElevenLabs, berechnet die abgeleiteten
 // Werte nach der verifizierten Sheet-Logik (siehe Design-Doku) und schreibt:
-//   - "Automatisiert": höchstens EINE Zeile pro Kalendertag (Upsert)
+//   - "Automatisiert":  höchstens EINE Zeile pro Kalendertag (Upsert)
+//   - "WeeklyHistory":  ALLE von ElevenLabs gemeldeten Wochen (voller Verlauf,
+//                       upsert - wächst nie doppelt, wird nur ergänzt/aktualisiert)
 //   - "Status":         Live-Snapshot bei JEDEM Lauf (für die App-Bridge)
 
 import { chromium } from "playwright";
@@ -12,6 +14,9 @@ import {
   ensureTabs,
   readDailyRows,
   upsertDailyRow,
+  replaceAllRows,
+  WEEKLY_HEADERS,
+  WEEKLY_SHEET,
   readStatus,
   writeStatus,
 } from "./sheetsClient.js";
@@ -28,7 +33,10 @@ async function main() {
 
   const storageState = JSON.parse(STORAGE_STATE_JSON);
   const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({ storageState });
+  // WICHTIG: Zeitzone explizit pinnen, unabhaengig davon, ob dies auf GitHub Actions
+  // (System-TZ UTC) oder lokal (System-TZ z.B. CEST) laeuft - siehe Bugfix 18.08.2026
+  // in elevenlabsReader.js (parseElevenLabsDate).
+  const context = await browser.newContext({ storageState, timezoneId: "Europe/Berlin" });
   const page = await context.newPage();
 
   let earnings;
@@ -39,7 +47,7 @@ async function main() {
   }
 
   const fxRate = await getUsdToEurRate();
-  const today = isoDate(new Date());
+  const today = todayInBerlin();
 
   const dailyRows = await readDailyRows(sheets, SPREADSHEET_ID);
   const sortedRows = [...dailyRows].sort((a, b) => (a.Datum < b.Datum ? -1 : 1));
@@ -65,6 +73,11 @@ async function main() {
   const yesterdayRow = [...sortedRows].reverse().find((r) => r.Datum < today);
   const previousE = yesterdayRow ? Number(yesterdayRow.GesamtwertUSD) : weekStartBalance;
 
+  // Bugfix (18.08.2026): Bei einem zweiten Lauf am selben Tag darf die bereits in
+  // einem frueheren Lauf HEUTE gesetzte Ablesezeit/Anfangsguthaben NICHT wieder auf
+  // leer zurueckgesetzt werden, nur weil isNewWeek beim zweiten Lauf false ist.
+  const todayExistingRow = sortedRows.find((r) => r.Datum === today);
+
   const gesamtwertUsd = earnings.currentPeriod.amount;
   const tagesumsatzUsd = isNewWeek ? gesamtwertUsd - weekStartBalance : gesamtwertUsd - previousE;
   const wochenumsatzUsd = gesamtwertUsd - weekStartBalance;
@@ -79,10 +92,16 @@ async function main() {
     .reduce((sum, e) => sum + e.amount, 0);
   const avgEurProTagMonat = rollierendeMonatssummeEur / 28; // 4 Wochen a 7 Tage, siehe Design-Doku
 
+  // ECHTE Ablesezeit von ElevenLabs (nicht die Uhrzeit des Collector-Laufs!) - siehe
+  // Bugfix vom 18.08.2026: Nutzer meldete Abweichung (11:59 laut ElevenLabs vs. faelschlich
+  // die Laufzeit des Skripts). latestHistoryEntry.dateIso ist der von ElevenLabs selbst
+  // gemeldete Zeitstempel des aktuellen ("Pending") bzw. letzten Eintrags.
+  const readoutIso = latestHistoryEntry?.dateIso ?? new Date().toISOString();
+
   await upsertDailyRow(sheets, SPREADSHEET_ID, {
     Datum: today,
-    Ablesezeit: isNewWeek ? nowTime() : "",
-    Anfangsguthaben_USD: isNewWeek ? weekStartBalance : "",
+    Ablesezeit: isNewWeek ? readoutIso : todayExistingRow?.Ablesezeit || "",
+    Anfangsguthaben_USD: isNewWeek ? weekStartBalance : todayExistingRow?.Anfangsguthaben_USD || "",
     GesamtwertUSD: gesamtwertUsd,
     TagesumsatzUSD: round2(tagesumsatzUsd),
     WochenumsatzUSD: round2(wochenumsatzUsd),
@@ -94,8 +113,20 @@ async function main() {
     AvgEUR_ProTag_Monat: round2(avgEurProTagMonat),
   });
 
+  // Volle Wochen-Historie in EINEM Bulk-Write ersetzen (siehe sheetsClient.js -
+  // ein Upsert pro Zeile hat live das API-Ratenlimit gesprengt).
+  const weeklyRows = earnings.history
+    .filter((e) => e.dateIso)
+    .map((entry) => ({
+      DatumZeit: entry.date,
+      DatumIso: entry.dateIso,
+      BetragEUR: entry.amount,
+      Status: entry.status,
+    }));
+  await replaceAllRows(sheets, SPREADSHEET_ID, WEEKLY_SHEET, WEEKLY_HEADERS, weeklyRows);
+
   await writeStatus(sheets, SPREADSHEET_ID, {
-    readoutTimeWeekly: isNewWeek ? nowTime() : weekAnchorRow?.Ablesezeit ?? "",
+    readoutTimeWeekly: isNewWeek ? readoutIso : weekAnchorRow?.Ablesezeit ?? readoutIso,
     weekStartBalanceUsd: weekStartBalance,
     currentPeriodUsd: earnings.currentPeriod.amount,
     currentPeriodCurrency: earnings.currentPeriod.currency,
@@ -107,15 +138,16 @@ async function main() {
   });
 
   console.log(
-    `OK: ${today} | GesamtwertUSD=${gesamtwertUsd} | Wochenumsatz(EL)=${wochenumsatzEurElevenLabs} EUR | neueWoche=${isNewWeek}`
+    `OK: ${today} | GesamtwertUSD=${gesamtwertUsd} | Wochenumsatz(EL)=${wochenumsatzEurElevenLabs} EUR | neueWoche=${isNewWeek} | Wochen-Historie=${earnings.history.length} Eintraege`
   );
 }
 
-function isoDate(d) {
-  return d.toISOString().slice(0, 10);
-}
-function nowTime() {
-  return new Date().toTimeString().slice(0, 5);
+// Heutiges Datum in deutscher Ortszeit (NICHT UTC) - sonst waere "heute" kurz nach
+// Mitternacht deutscher Zeit faelschlich noch "gestern" (UTC-Tageswechsel liegt bis zu
+// 2h spaeter). Siehe Bugfix 18.08.2026.
+function todayInBerlin() {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }).format(new Date());
+  return parts; // "en-CA" liefert direkt "YYYY-MM-DD"
 }
 function daysBetween(a, b) {
   const ms = new Date(b).getTime() - new Date(a).getTime();
