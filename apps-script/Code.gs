@@ -135,7 +135,7 @@ function doGet(e) {
       yearly: yearlyAgg, // "YYYY"
       intraday: intraday
         .filter((r) => r.Timestamp)
-        .map((r) => ({ ts: r.Timestamp, usd: Number(r.GesamtwertUSD || 0) }))
+        .map((r) => ({ ts: r.Timestamp, usd: parseFlexibleNumber(r.GesamtwertUSD) }))
         .sort((a, b) => (a.ts < b.ts ? -1 : 1)),
     },
   };
@@ -290,6 +290,17 @@ function jsonResponse(obj, _statusCode) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(
     ContentService.MimeType.JSON
   );
+}
+
+// Robust gegen Zellen, die (aus welchem Grund auch immer - z.B. Locale-Eigenheiten
+// beim Schreiben) als Text mit Komma statt Punkt gespeichert wurden ("86,31" statt
+// 86.31). Number("86,31") waere sonst NaN -> JSON.stringify macht daraus "null"
+// (Bugfix 18.08.2026, betraf vereinzelte Intraday-Zeilen).
+function parseFlexibleNumber(v) {
+  if (v === "" || v === null || v === undefined) return 0;
+  if (typeof v === "number") return v;
+  const n = Number(String(v).replace(",", "."));
+  return isNaN(n) ? 0 : n;
 }
 
 function round2(n) {
