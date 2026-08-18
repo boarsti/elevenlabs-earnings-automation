@@ -148,13 +148,13 @@ async function main() {
   await replaceAllRows(sheets, SPREADSHEET_ID, WEEKLY_SHEET, WEEKLY_HEADERS, weeklyRows);
 
   // Intraday-Snapshot fuer die "Tag"-Ansicht im Dashboard (echte Stunden-Kurve
-  // heute vs. gestern statt nur des einen Tages-Endwerts). Nur die letzten 48h
-  // werden behalten, damit der Tab nicht unbegrenzt waechst.
+  // heute vs. gestern statt nur des einen Tages-Endwerts). Bugfix (18.08.2026,
+  // Nutzer-Feedback "dauerhaft verankert"): frueher wurden Eintraege aelter als 48h
+  // verworfen - jetzt bleibt die volle Historie dauerhaft erhalten (kein Datenverlust
+  // mehr), die "Tag"-Ansicht filtert sich ohnehin selbst auf das jeweils aktuelle
+  // 24h-Fenster.
   const existingIntraday = await readIntradayRows(sheets, SPREADSHEET_ID);
-  const cutoffMs = Date.now() - 48 * 60 * 60 * 1000;
-  const keptIntraday = existingIntraday.filter(
-    (r) => r.Timestamp && new Date(r.Timestamp).getTime() >= cutoffMs
-  );
+  const keptIntraday = existingIntraday.filter((r) => r.Timestamp);
   keptIntraday.push({ Timestamp: earnings.scrapedAt, GesamtwertUSD: gesamtwertUsd });
   await replaceAllRows(sheets, SPREADSHEET_ID, INTRADAY_SHEET, INTRADAY_HEADERS, keptIntraday);
 
