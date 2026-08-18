@@ -24,9 +24,11 @@ npm run login
 ```
 
 Es öffnet sich ein Browser-Fenster. Logge dich normal bei ElevenLabs ein (inkl. eventueller
-2FA), warte bis die Payouts-Seite mit "Current Period" sichtbar ist, dann im Terminal ENTER
-drücken. Das Skript speichert `collector/storageState.json` (liegt in `.gitignore`, wird nie
-committed).
+2FA) — das Skript erkennt automatisch, sobald die Payouts-Seite mit "Current Period" sichtbar
+ist, und speichert dann `collector/storageState.json` (liegt in `.gitignore`, wird nie
+committed). Analytics-Datenmüll (z. B. ein PostHog-Cache, live bis zu 445 KB) wird dabei
+automatisch herausgefiltert, damit die Datei unter dem 48-KB-Limit für GitHub-Actions-Secrets
+bleibt.
 
 ### 3. Google-Cloud-Service-Account anlegen
 
