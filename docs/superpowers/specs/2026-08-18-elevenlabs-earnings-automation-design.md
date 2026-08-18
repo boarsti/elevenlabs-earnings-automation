@@ -19,6 +19,28 @@ Per Live-Untersuchung der ElevenLabs-Weboberfläche (authentifizierte Session, N
 3. Diese Werte werden **rein client-seitig über einen Google-Firestore-Realtime-Listener** geladen (Projekt `xi-labs`, Firebase Auth). Es existiert kein REST-GET-Endpunkt und keine SSR-Einbettung der Werte im initialen HTML (verifiziert). Das Firestore-Wire-Protokoll (WebChannel) ist mit den verfügbaren Mitteln nicht praktikabel zu dekodieren (bräuchte Skript-Injektion vor App-Bootstrap, nicht verfügbar).
 4. Entscheidung (mit Nutzer abgestimmt): **Die Zahlen werden von der authentifizierten, gerenderten Seite gelesen** (stabile Text-Labels: "Current Period", "All Time Payouts", Tabellen-Header), nicht per Firestore-Direktzugriff. Das ist pragmatisch gleich robust, da beide Wege auf undokumentierten, änderbaren Interna beruhen — der Geschwindigkeitsvorteil von Firestore ist bei einem 10-Minuten-Intervall irrelevant.
 
+## Verifizierte Sheet-Formeln (Live-Abgleich, Stand Zeile 490 = 18.08.2026)
+
+Per Nutzerhinweis sind Zeilen ≤154 eine Altlast mit abweichender Spaltennutzung und **irrelevant** für die Automatisierung. Die folgenden Formeln wurden direkt an der aktuellen, lebenden Kante der Tabelle (Zeile 490, heutiges Datum) geprüft und gelten als verbindliche Referenz für den Collector:
+
+| Spalte | Bedeutung | Verifizierte Logik |
+|---|---|---|
+| A | Datum | Wert |
+| B | Ablesezeit | **Nur am ersten Tag jeder Woche gefüllt** (Wochen-Anker), sonst leer |
+| C | Anfangsguthaben | **Nur am ersten Tag jeder Woche gefüllt** (manuell), sonst leer — Wochen-Reset-Marker |
+| D | fixer täglicher Vergleichszeitpunkt | Konstante, hier durchgängig `20:00` — für die Automatisierung nicht relevant (Nutzerangabe bestätigt) |
+| E | an Zeitpunkt D abgelesener Gesamtwert (USD, kumulativ seit Kontostart) | Manuell |
+| F | Tagesumsatz | Erster Tag der Woche: `=E − C` (dieser Zeile). Folgetage: `=E_heute − E_gestern` |
+| G | kumulierter Wochenumsatz | `=E_heute − $C$_Wochenstart` (absoluter Bezug auf den Wochen-Anker-Tag) |
+| H | Ø Tageswert dieser Woche | `=G / Anzahl bisheriger Tage dieser Woche` (z. B. `G/1`, `G/2`, …) |
+| I | USD→EUR-Kurs des Tages | `=INDEX(GOOGLEFINANCE("CURRENCY:USDEUR";"price";Datum);2;2)` — **am 18.08.2026 live `#N/A`** (GOOGLEFINANCE liefert für den laufenden Tag keinen Kurs) |
+| J | Wochenumsatz in EUR (Auszahlungsbetrag) | Manuell, von ElevenLabs abgelesen, reiner Zahlenwert |
+| K | Wochenumsatz in EUR über Tages-FX | `=G × I` — **kaskadiert aktuell zu `#N/A`, weil I fehlschlägt** |
+| L | rollierender "Monats"-Wert | `=Summe der letzten 4 J-Wochenwerte` (kein Kalendermonat, sondern gleitende 4-Wochen-Summe) |
+| M | Ø $/Tag je Monat | in Stichproben leer, Formel nicht abschließend verifiziert — nicht architekturrelevant |
+
+**Wichtiger Beleg für eine bereits getroffene Design-Entscheidung:** Die eigene GOOGLEFINANCE-Formel des Nutzers in Spalte I ist am Tag der Prüfung *live kaputt* (`#N/A`) und reißt K mit. Das bestätigt unabhängig die Design-Entscheidung, den Collector **nicht** auf GOOGLEFINANCE für den FX-Kurs des laufenden Tages zu stützen, sondern eine robustere, dedizierte FX-Quelle zu verwenden (siehe Risiken).
+
 ## Architektur
 
 ```
@@ -47,7 +69,7 @@ Drei unabhängig austauschbare Bausteine: **Collector** (Datenbeschaffung), **Br
 - Scheduled GitHub Actions Workflow (Cron, Zielintervall 10 Minuten — GitHub garantiert keine exakte Taktung, Verzögerungen von einigen Minuten sind bei Cron-Workflows möglich und werden als Limitation akzeptiert):
   1. Headless-Browser mit gespeicherter Session startet, öffnet `/app/voices-earnings/payouts`.
   2. Wartet auf Hydration, liest "Current Period" ($), "All Time Payouts" (€), History-Tabellen-Zeilen (Date/Amount/Currency/Status) über Text-Anker (keine fragilen CSS-Klassen).
-  3. Berechnet abgeleitete Werte analog zum bestehenden Sheet (Tagesumsatz, kumulierter Wochenumsatz, Ø, Monatswerte, FX via unabhängiger FX-API — siehe Risiken).
+  3. Berechnet abgeleitete Werte **nach den verifizierten Formeln** (siehe Abschnitt "Verifizierte Sheet-Formeln"): F/G/H als Tages-/Wochenkumulierung mit Wochen-Anker, K = G × I, L = gleitende 4-Wochen-Summe aus J. FX-Kurs (I) über eine unabhängige FX-API statt GOOGLEFINANCE (siehe Risiken/Beleg oben).
   4. Schreibt/aktualisiert eine Zeile im Google Sheet via Sheets API (Google-Cloud-Service-Account, eigens für dieses Projekt angelegt, per GitHub Secret).
 - **Fehlerfall** (Login abgelaufen, UI-Element nicht gefunden): Workflow schlägt fehl → GitHub sendet automatisch eine Fehler-Mail an den Repo-Owner. Kein stiller Ausfall.
 
@@ -95,7 +117,7 @@ Drei unabhängig austauschbare Bausteine: **Collector** (Datenbeschaffung), **Br
 
 ## Bekannte Risiken / Limitationen
 
-- **FX-Umrechnung**: Der Collector nutzt eine unabhängige FX-API; kann geringfügig vom internen ElevenLabs-Kurs (Spalte J) abweichen. Wird transparent gekennzeichnet, nicht verschwiegen.
+- **FX-Umrechnung**: Der Collector nutzt eine unabhängige FX-API statt der bisherigen GOOGLEFINANCE-Formel (Spalte I), die nachweislich für den laufenden Tag `#N/A` liefert; kann geringfügig vom internen ElevenLabs-Kurs abweichen. Wird transparent gekennzeichnet, nicht verschwiegen.
 - **Auszahlungs-Zeitpunkt driftet**: ElevenLabs zahlt laut eigener Doku "alle 6–8 Tage", nicht exakt wöchentlich fix. Die "statische Wochen-Uhrzeit" wird pro Woche neu aus dem tatsächlichen Auszahlungs-Zeitstempel bestimmt, nicht hart codiert.
 - **GitHub-Actions-Cron-Timing**: Kein Echtzeit-Garant; Verzögerungen von einigen Minuten sind normal.
 - **UI-Änderungen bei ElevenLabs**: Der Collector kann brechen, wenn ElevenLabs Text-Labels/Struktur der Payouts-Seite ändert. Mitigation: Fehler-Alarmierung statt stiller Ausfall (siehe oben).
@@ -103,7 +125,7 @@ Drei unabhängig austauschbare Bausteine: **Collector** (Datenbeschaffung), **Br
 
 ## Offene Punkte für die Umsetzungsphase (nicht Teil dieses Designs)
 
-- Exakte Nachbildung der bestehenden Sheet-Formeln (Spalten F–M) — wird beim Einlesen des Live-Sheets in der Implementierung 1:1 übernommen.
+- Formel für Spalte M (Ø $/Tag je Monat) war in Stichproben leer und ist final zu bestätigen, sobald reale Monatswechsel-Zeilen auftreten — nicht architekturrelevant, wird beim Schreiben des Collectors mit Fallback-Logik (`L / Anzahl Tage im Zeitraum`) abgesichert.
 - Einrichtung Google-Cloud-Service-Account + Sheets-API-Freigabe.
 - Einrichtung GitHub-Repo (Remote) + Secrets.
 - Backfill-Strategie für historische Daten (bestehende Sheet-Historie wird übernommen, nicht neu berechnet).
