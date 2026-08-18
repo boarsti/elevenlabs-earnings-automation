@@ -148,7 +148,7 @@
       <div class="max-h-96 overflow-y-auto">
         <table class="w-full text-sm">
           <thead class="muted text-left sticky top-0" style="background:var(--card-bg)">
-            <tr><th class="py-1">Woche ab</th><th>EUR</th><th>Status</th></tr>
+            <tr><th class="py-1">Woche ab</th><th>EUR</th><th>Ø/Tag</th><th>Status</th></tr>
           </thead>
           <tbody id="historyTableBody"></tbody>
         </table>
@@ -257,7 +257,8 @@ function render(data) {
     const paid = w.status === "Paid";
     const statusLabel = paid ? "Ausgezahlt" : w.status === "Pending" ? "Ausstehend" : (w.status || "—");
     const statusColor = paid ? "#3FBF6F" : "#B35A0A";
-    return `<tr class="border-t" style="border-color:var(--card-border)"><td class="py-1">${fmtDateTime(w.weekStart)}</td><td>${fmtEur(w.eur)}</td><td style="color:${statusColor}">${statusLabel}</td></tr>`;
+    const avgPerDay = w.avgPerDayEur === null || w.avgPerDayEur === undefined ? "—" : fmtEur(w.avgPerDayEur);
+    return `<tr class="border-t" style="border-color:var(--card-border)"><td class="py-1">${fmtDateTime(w.weekStart)}</td><td>${fmtEur(w.eur)}</td><td class="font-num">${avgPerDay}</td><td style="color:${statusColor}">${statusLabel}</td></tr>`;
   }).join("");
 
   updateChart(currentRange);
@@ -330,11 +331,18 @@ function buildWeekCompare(daily) {
   });
   const weekKeys = Object.keys(byWeek).sort();
   if (weekKeys.length < 2) return null;
-  const thisWeek = byWeek[weekKeys[weekKeys.length - 1]];
+  const thisWeekKey = weekKeys[weekKeys.length - 1];
+  const thisWeek = byWeek[thisWeekKey];
   const lastWeek = byWeek[weekKeys[weekKeys.length - 2]];
   const dayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+  // Volles Datum statt nur Wochentag - bei 7 Punkten ist genug Platz (Nutzer-Feedback).
+  const labels = dayNames.map((name, i) => {
+    const d = new Date(thisWeekKey + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + i);
+    return `${name} ${String(d.getUTCDate()).padStart(2, "0")}.${String(d.getUTCMonth() + 1).padStart(2, "0")}.`;
+  });
   return {
-    labels: dayNames,
+    labels,
     thisValues: dayNames.map((_, i) => thisWeek[i]?.usd ?? null),
     lastValues: dayNames.map((_, i) => lastWeek[i]?.usd ?? null),
     thisLabel: "Diese Woche",
@@ -350,10 +358,18 @@ function buildMonthCompare(daily) {
   });
   const monthKeys = Object.keys(byMonth).sort();
   if (monthKeys.length < 2) return null;
-  const thisMonth = byMonth[monthKeys[monthKeys.length - 1]];
+  const thisMonthKey = monthKeys[monthKeys.length - 1];
+  const thisMonth = byMonth[thisMonthKey];
   const lastMonth = byMonth[monthKeys[monthKeys.length - 2]];
   const maxLen = Math.max(thisMonth.length, lastMonth.length, 28);
-  const labels = Array.from({ length: maxLen }, (_, i) => String(i + 1));
+  // Wochentag + Tag statt nur der Tageszahl - bei bis zu 31 Punkten ist "Di 18."
+  // kompakt genug (Nutzer-Feedback).
+  const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+  const labels = Array.from({ length: maxLen }, (_, i) => {
+    const d = new Date(`${thisMonthKey}-01T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + i);
+    return `${dayNames[d.getUTCDay()]} ${i + 1}.`;
+  });
   return {
     labels,
     thisValues: labels.map((_, i) => thisMonth[i]?.usd ?? null),

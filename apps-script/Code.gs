@@ -39,10 +39,21 @@ function doGet(e) {
   const sinceYesterdayUsd = Number(todayRow?.TagesumsatzUSD || 0);
   const thisWeekUsdNet = Number(todayRow?.WochenumsatzUSD || 0);
 
-  const weeklySorted = weekly
+  const weeklySortedRaw = weekly
     .filter((r) => r.DatumIso)
     .map((r) => ({ weekStart: r.DatumIso, eur: Number(r.BetragEUR || 0), status: r.Status }))
     .sort((a, b) => (a.weekStart < b.weekStart ? -1 : 1));
+
+  // Durchschnitt EUR/Tag je Woche (entspricht Spalte H der urspruenglichen manuellen
+  // Tabelle "ab 2.2025" - dort bei jedem woechentlichen Abschluss von Hand notiert).
+  // Berechnet aus der tatsaechlichen Laenge jeder Woche (Abstand zum naechsten
+  // Ablesezeitpunkt), nicht pauschal durch 7 - Wochen sind nicht immer exakt 7 Tage.
+  const weeklySorted = weeklySortedRaw.map((w, i) => {
+    const next = weeklySortedRaw[i + 1];
+    if (!next) return { ...w, avgPerDayEur: null }; // laufende Woche noch nicht abgeschlossen
+    const days = Math.max(1, daysBetweenIso(w.weekStart.slice(0, 10), next.weekStart.slice(0, 10)));
+    return { ...w, avgPerDayEur: round2(w.eur / days) };
+  });
 
   const yearlyAgg = buildPeriodAggregate(weekly, 4);
   const currentYear = String(new Date().getFullYear());
