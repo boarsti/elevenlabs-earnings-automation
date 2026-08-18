@@ -28,17 +28,29 @@ löschen (durch die mitgelieferten Dateien ersetzt).
    die Dateien aus `ios-app/ElevenLabsEarningsWidget/` per Drag & Drop einfügen, Target:
    **ElevenLabsEarningsWidget**
 
-## 4. Config.swift, EarningsData.swift, EarningsClient.swift in BEIDEN Targets
+## 4. Diese Dateien in BEIDEN Targets
 
-Diese drei Dateien werden von App **und** Widget gebraucht. Datei anklicken → rechts im
-"File Inspector" unter "Target Membership" **beide** Häkchen setzen (App + Widget).
+`Config.swift`, `EarningsData.swift`, `EarningsClient.swift`, `Formatting.swift` werden
+von App **und** Widget gebraucht. Jede Datei anklicken → rechts im "File Inspector"
+unter "Target Membership" **beide** Häkchen setzen (App + Widget).
+
+`ChartBuilder.swift`, `OverviewView.swift`, `HistoryView.swift`, `PayoutsView.swift`,
+`DashboardView.swift` werden **nur** von der App gebraucht (Target: ElevenLabsEarnings).
 
 ## 5. Bridge-URL eintragen
 
 In `ElevenLabsEarnings/Config.swift` die Web-App-URL + Token aus
 `apps-script/README.md` eintragen.
 
-## 6. Auf eigenem iPhone ausführen
+## 6. App-Icon einsetzen
+
+Dein Logo liegt bereits fertig vorbereitet (1024×1024, ohne Transparenz, wie von Apple
+gefordert) unter `ios-app/AppIcon/AppIcon-1024.png`.
+
+1. In Xcode: `Assets.xcassets` → `AppIcon` anklicken.
+2. Die Datei `AppIcon-1024.png` per Drag & Drop auf das große "1024pt"-Feld ziehen.
+
+## 7. Auf eigenem iPhone ausführen
 
 1. iPhone per Kabel verbinden, in Xcode als Ziel-Gerät auswählen.
 2. Signing & Capabilities → dein Apple-ID-Team auswählen (kostenloses Personal Team reicht).
