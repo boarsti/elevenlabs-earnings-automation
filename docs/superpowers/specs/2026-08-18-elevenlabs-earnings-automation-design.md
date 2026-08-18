@@ -128,5 +128,5 @@ Drei unabhängig austauschbare Bausteine: **Collector** (Datenbeschaffung), **Br
 - Formel für Spalte M (Ø $/Tag je Monat) war in Stichproben leer und ist final zu bestätigen, sobald reale Monatswechsel-Zeilen auftreten — nicht architekturrelevant, wird beim Schreiben des Collectors mit Fallback-Logik (`L / Anzahl Tage im Zeitraum`) abgesichert.
 - Einrichtung Google-Cloud-Service-Account + Sheets-API-Freigabe.
 - Einrichtung GitHub-Repo (Remote) + Secrets.
-- Backfill-Strategie für historische Daten (bestehende Sheet-Historie wird übernommen, nicht neu berechnet).
+- Backfill-Strategie für historische Daten: **nur Zeilen 261 bis heute** aus dem bestehenden Sheet sind relevant und werden 1:1 übernommen (Nutzerbestätigung; alles davor, inkl. der bereits erwähnten Zeilen ≤154, ist Altlast und wird nicht migriert).
 - Playwright-Login-Flow (Umgang mit ggf. 2FA — einmaliger interaktiver Schritt, kein Automatisierungsproblem für den laufenden Betrieb).
