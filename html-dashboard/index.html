@@ -278,12 +278,13 @@ function isoWeekKey(dateStr) {
 // "Tag": echte Stunden-Kurve aus den Intraday-Snapshots (alle 10 Minuten, siehe
 // collect.js) - NICHT an Mitternacht ausgerichtet, sondern an der woechentlichen
 // ElevenLabs-Ablesezeit (Nutzer-Feedback: "heute ab 11:59 bis morgen 11:58 sind
-// 24h"). Das aktuelle 24h-Fenster laeuft vom letzten Ablesezeit-Zeitpunkt bis
-// jetzt, das Vergleichsfenster ist exakt die 24h davor - beide auf derselben
-// "Stunden seit Fensterbeginn"-Achse ausgerichtet. Liefert null, solange die
-// Intraday-Erfassung noch keine volle Vorperiode abdeckt (Feature ist neu).
+// 24h"). Die Achse zeigt IMMER das volle 24h-Fenster ab der Ablesezeit, auch wenn
+// noch keine (oder nur wenige) Datenpunkte vorliegen - so startet die Ansicht
+// sichtbar bei 11:59, statt erst beim ersten erfassten Punkt. Die Vortages-
+// Vergleichslinie (blau) erscheint erst, sobald ein volles Vorfenster erfasst
+// wurde (naturgemaess fruehestens am Folgetag).
 function buildDayCompare(intraday, readoutTimeWeeklyIso) {
-  if (!intraday.length || !readoutTimeWeeklyIso) return null;
+  if (!readoutTimeWeeklyIso) return null;
   const DAY_MS = 24 * 60 * 60 * 1000;
   const anchorMs = new Date(readoutTimeWeeklyIso).getTime();
   const windowsElapsed = Math.floor((Date.now() - anchorMs) / DAY_MS);
@@ -297,7 +298,6 @@ function buildDayCompare(intraday, readoutTimeWeeklyIso) {
     });
   const thisWindow = pointsInWindow(windowStart);
   const lastWindow = pointsInWindow(prevWindowStart);
-  if (!lastWindow.length) return null;
 
   const labels = Array.from({ length: 25 }, (_, h) =>
     new Date(windowStart + h * 60 * 60 * 1000).toLocaleTimeString("de-DE", {
@@ -316,8 +316,8 @@ function buildDayCompare(intraday, readoutTimeWeeklyIso) {
   return {
     labels,
     thisValues: bucketByOffset(thisWindow, windowStart),
-    lastValues: bucketByOffset(lastWindow, prevWindowStart),
-    thisLabel: "Aktuelle 24h (ab Ablesezeit)",
+    lastValues: lastWindow.length ? bucketByOffset(lastWindow, prevWindowStart) : null,
+    thisLabel: "Heute (ab Ablesezeit)",
     lastLabel: "Vortag (gleicher Zeitraum)",
   };
 }
@@ -436,7 +436,12 @@ function updateChart(range) {
           fill: false,
           spanGaps: true,
         },
-        {
+      ];
+      // Vorperiode nur zeigen, wenn dafuer schon ein vollstaendiges Fenster erfasst
+      // wurde (bei "Tag" z.B. erst ab dem Folgetag nach Einfuehrung der Intraday-
+      // Erfassung moeglich, siehe buildDayCompare).
+      if (cmp.lastValues) {
+        datasets.push({
           label: cmp.lastLabel,
           data: cmp.lastValues,
           borderColor: "#3355FF",
@@ -446,8 +451,8 @@ function updateChart(range) {
           tension: 0.3,
           fill: false,
           spanGaps: true,
-        },
-      ];
+        });
+      }
     } else {
       // Fallback, solange fuer den Vergleich noch nicht genug Historie vorliegt
       // (z.B. "Tag" direkt nach Einfuehrung der Intraday-Erfassung).
