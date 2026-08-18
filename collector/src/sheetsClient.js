@@ -128,9 +128,14 @@ export async function upsertRow(sheets, spreadsheetId, sheetName, headers, keyHe
   const values = [headers.map((h) => rowValuesByHeader[h] ?? "")];
 
   if (rowIndex === -1) {
+    // Bugfix (18.08.2026): Ein schmaler Range wie "A2" laesst die Sheets-API die
+    // Tabellengrenzen falsch erkennen - neue Zeilen landeten dadurch direkt NACH der
+    // Kopfzeile (Zeile 2) statt am tatsaechlichen Ende, wodurch aeltere Zeilen darunter
+    // "verschoben" wirkten. Ein Range, der das ganze Blatt abdeckt, erkennt die
+    // bestehende Tabelle zuverlaessig und haengt danach an.
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: `${sheetName}!A2`,
+      range: sheetName,
       valueInputOption: "RAW",
       insertDataOption: "INSERT_ROWS",
       requestBody: { values },
@@ -155,11 +160,14 @@ export async function upsertDailyRow(sheets, spreadsheetId, rowValuesByHeader) {
 // live das Sheets-API-Ratenlimit gesprengt (429 "Quota exceeded"), siehe Design-Doku.
 export async function replaceAllRows(sheets, spreadsheetId, sheetName, headers, rowsOfValuesByHeader) {
   const values = rowsOfValuesByHeader.map((row) => headers.map((h) => row[h] ?? ""));
+  // Bugfix (18.08.2026): Leere Eingabe VOR dem Clear abfangen - sonst wuerde ein leeres
+  // ElevenLabs-Ergebnis (z.B. durch ein kuenftig geaendertes Datumsformat, siehe
+  // parseElevenLabsDate) den ganzen Tab loeschen, ohne etwas zurueckzuschreiben.
+  if (!values.length) return;
   await sheets.spreadsheets.values.clear({
     spreadsheetId,
     range: `${sheetName}!A2:${String.fromCharCode(64 + headers.length)}100000`,
   });
-  if (!values.length) return;
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: `${sheetName}!A2`,
@@ -173,9 +181,10 @@ export async function replaceAllRows(sheets, spreadsheetId, sheetName, headers, 
 export async function appendRows(sheets, spreadsheetId, sheetName, headers, rowsOfValuesByHeader) {
   const values = rowsOfValuesByHeader.map((row) => headers.map((h) => row[h] ?? ""));
   if (!values.length) return;
+  // Siehe Bugfix-Kommentar in upsertRow() - voller Sheet-Name statt schmalem "A2"-Range.
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: `${sheetName}!A2`,
+    range: sheetName,
     valueInputOption: "RAW",
     insertDataOption: "INSERT_ROWS",
     requestBody: { values },

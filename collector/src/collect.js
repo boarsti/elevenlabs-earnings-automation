@@ -63,9 +63,15 @@ async function main() {
     ? null
     : [...sortedRows].reverse().find((r) => r.Anfangsguthaben_USD !== "");
 
+  // Bugfix (18.08.2026): ElevenLabs' "Current Period"-Zaehler startet nachweislich bei
+  // (nahe) 0, sobald eine neue Woche beginnt (verifiziert anhand der Tages-Historie:
+  // nach jedem woechentlichen Readout faellt GesamtwertUSD auf einen kleinen Betrag
+  // zurueck). Der alte Code nahm faelschlich den AKTUELLEN currentPeriod.amount als
+  // Startguthaben - das ist der Stand JETZT, nicht der Stand bei Periodenbeginn, und
+  // fuehrte dazu, dass WochenumsatzUSD/DurchschnittUSD_Woche immer 0 ergaben.
   const weekStartBalance = isNewWeek
-    ? earnings.currentPeriod.amount
-    : Number(weekAnchorRow?.Anfangsguthaben_USD ?? earnings.currentPeriod.amount);
+    ? 0
+    : Number(weekAnchorRow?.Anfangsguthaben_USD ?? 0);
 
   const weekAnchorDate = isNewWeek ? today : weekAnchorRow?.Datum ?? today;
   const daysElapsedThisWeek = Math.max(1, daysBetween(weekAnchorDate, today) + 1);
@@ -79,7 +85,20 @@ async function main() {
   const todayExistingRow = sortedRows.find((r) => r.Datum === today);
 
   const gesamtwertUsd = earnings.currentPeriod.amount;
-  const tagesumsatzUsd = isNewWeek ? gesamtwertUsd - weekStartBalance : gesamtwertUsd - previousE;
+
+  // "Seit gestern dieser Uhrzeit": normalerweise die einfache Differenz zum gestrigen
+  // Tageswert. Faellt der woechentliche Readout ZWISCHEN gestern und heute (die
+  // aktuelle Periode hat also HEUTE erst begonnen), waere ein Vergleich mit dem
+  // gestrigen - noch zur ALTEN Periode gehoerenden - Zaehlerstand irrefuehrend (der
+  // Zaehler wurde ja gerade zurueckgesetzt). An einem Rollover-Tag zeigen wir daher
+  // ersatzweise den Umsatz seit Periodenbeginn (beste verfuegbare Naeherung, siehe
+  // Design-Doku). Bugfix (18.08.2026): frueher haengte dies an "isNewWeek" (nur im
+  // Lauf wahr, der den Rollover erkennt) statt am Umstand, dass HEUTE der Periodenstart
+  // ist - bei einem zweiten Lauf am selben Tag griff faelschlich der falsche Zweig.
+  const periodStartedToday = weekAnchorDate === today;
+  const tagesumsatzUsd = periodStartedToday
+    ? gesamtwertUsd - weekStartBalance
+    : gesamtwertUsd - previousE;
   const wochenumsatzUsd = gesamtwertUsd - weekStartBalance;
   const durchschnittUsd = wochenumsatzUsd / daysElapsedThisWeek;
 
