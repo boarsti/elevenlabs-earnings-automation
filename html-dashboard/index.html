@@ -117,12 +117,14 @@
         </div>
       </div>
       <div class="card p-4">
-        <p class="text-xs muted font-medium">Rollierender Monat (EUR, 4 Wochen)</p>
-        <p id="rollingMonthEur" class="text-2xl font-semibold font-num mt-1">—</p>
+        <p class="text-xs muted font-medium">Dieser Monat (EUR)</p>
+        <p id="thisMonthEur" class="text-2xl font-semibold font-num mt-1">—</p>
+        <p id="thisMonthEurPrev" class="text-xs muted font-num mt-1">&nbsp;</p>
       </div>
       <div class="card p-4">
         <p class="text-xs muted font-medium">Dieses Jahr (EUR)</p>
         <p id="thisYearEur" class="text-2xl font-semibold font-num mt-1">—</p>
+        <p id="thisYearEurPrev" class="text-xs muted font-num mt-1">&nbsp;</p>
       </div>
     </section>
 
@@ -141,13 +143,15 @@
     </section>
 
     <section class="card p-4">
-      <h2 class="font-display font-bold mb-3">Letzte Auszahlungen</h2>
-      <table class="w-full text-sm">
-        <thead class="muted text-left">
-          <tr><th class="py-1">Woche ab</th><th>EUR</th><th>Status</th></tr>
-        </thead>
-        <tbody id="historyTableBody"></tbody>
-      </table>
+      <h2 class="font-display font-bold mb-3">Alle Auszahlungen</h2>
+      <div class="max-h-96 overflow-y-auto">
+        <table class="w-full text-sm">
+          <thead class="muted text-left sticky top-0" style="background:var(--card-bg)">
+            <tr><th class="py-1">Woche ab</th><th>EUR</th><th>Status</th></tr>
+          </thead>
+          <tbody id="historyTableBody"></tbody>
+        </table>
+      </div>
     </section>
 
     <p class="text-center text-xs muted font-num">
@@ -206,7 +210,8 @@ function render(data) {
   document.getElementById("sinceLabel").textContent = fmtSinceLabel(data);
   document.getElementById("sinceYesterday").textContent = fmtUsd(data.sinceYesterdayUsd);
   document.getElementById("thisWeekUsd").textContent = fmtUsd(data.thisWeekUsdNet);
-  document.getElementById("avgDaily").textContent = fmtUsd(data.avgDailyUsd);
+  document.getElementById("avgDaily").textContent =
+    data.avgDailyUsd === null || data.avgDailyUsd === undefined ? "—" : fmtUsd(data.avgDailyUsd);
   document.getElementById("thisWeekUsdPrev").textContent =
     data.lastWeekUsdSameOffset !== null && data.lastWeekUsdSameOffset !== undefined
       ? `Vorwoche: ${fmtUsd(data.lastWeekUsdSameOffset)}`
@@ -217,8 +222,16 @@ function render(data) {
       : " ";
 
   document.getElementById("thisWeekEur").textContent = fmtEur(data.thisWeekEur);
-  document.getElementById("rollingMonthEur").textContent = fmtEur(data.rollingMonthEur);
+  document.getElementById("thisMonthEur").textContent = fmtEur(data.thisMonthEur);
+  document.getElementById("thisMonthEurPrev").textContent =
+    data.lastMonthEur !== null && data.lastMonthEur !== undefined
+      ? `Vormonat: ${fmtEur(data.lastMonthEur)}`
+      : " ";
   document.getElementById("thisYearEur").textContent = fmtEur(data.thisYearEur);
+  document.getElementById("thisYearEurPrev").textContent =
+    data.lastYearEurSamePeriod !== null && data.lastYearEurSamePeriod !== undefined
+      ? `Vorjahr (bis hierhin): ${fmtEur(data.lastYearEurSamePeriod)}`
+      : " ";
 
   const pctEl = document.getElementById("thisWeekPct");
   pctEl.textContent = fmtPct(data.thisWeekVsLastWeekPct);
@@ -235,7 +248,7 @@ function render(data) {
     : "—";
 
   const tbody = document.getElementById("historyTableBody");
-  tbody.innerHTML = weekly.slice(-10).reverse().map(w => {
+  tbody.innerHTML = [...weekly].reverse().map(w => {
     const paid = w.status === "Paid";
     const statusLabel = paid ? "Ausgezahlt" : w.status === "Pending" ? "Ausstehend" : (w.status || "—");
     const statusColor = paid ? "#3FBF6F" : "#B35A0A";
@@ -367,8 +380,9 @@ function updateChart(range) {
     datasets = [
       {
         data: series.map((p) => p.eur ?? 0),
-        borderColor: "#3355FF",
-        backgroundColor: "#3355FF",
+        borderColor: "#FF8A1F",
+        backgroundColor: "#FF8A1F",
+        borderWidth: 2,
         tension: 0.3,
         fill: false,
       },
@@ -386,12 +400,15 @@ function updateChart(range) {
 
     if (cmp) {
       labels = cmp.labels;
+      // Aktuelle Periode = Amber (durchgezogen, dick), Vorperiode = klares Blau
+      // (duenner, gestrichelt) - deutlich unterscheidbar (Nutzer-Feedback 18.08.2026).
       datasets = [
         {
           label: cmp.thisLabel,
           data: cmp.thisValues,
-          borderColor: "#3355FF",
-          backgroundColor: "#3355FF",
+          borderColor: "#FF8A1F",
+          backgroundColor: "#FF8A1F",
+          borderWidth: 3,
           tension: 0.3,
           fill: false,
           spanGaps: true,
@@ -399,9 +416,10 @@ function updateChart(range) {
         {
           label: cmp.lastLabel,
           data: cmp.lastValues,
-          borderColor: "rgba(16,23,58,0.35)",
-          backgroundColor: "rgba(16,23,58,0.35)",
-          borderDash: [4, 4],
+          borderColor: "#3355FF",
+          backgroundColor: "#3355FF",
+          borderWidth: 1.5,
+          borderDash: [5, 4],
           tension: 0.3,
           fill: false,
           spanGaps: true,
@@ -425,8 +443,9 @@ function updateChart(range) {
       datasets = [
         {
           data: fallback.map((p) => p.v),
-          borderColor: "#3355FF",
-          backgroundColor: "#3355FF",
+          borderColor: "#FF8A1F",
+          backgroundColor: "#FF8A1F",
+          borderWidth: 3,
           tension: 0.3,
           fill: false,
         },
