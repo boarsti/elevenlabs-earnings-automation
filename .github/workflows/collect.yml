@@ -1,0 +1,35 @@
+name: ElevenLabs Earnings Collector
+
+on:
+  schedule:
+    # Ziel: alle 10 Minuten. GitHub garantiert keine exakte Taktung
+    # (siehe Design-Doku, Abschnitt "Bekannte Risiken").
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {} # manueller Start zum Testen ueber den "Actions"-Tab
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: collector
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run collector
+        env:
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          ELEVENLABS_STORAGE_STATE: ${{ secrets.ELEVENLABS_STORAGE_STATE }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: npm run collect

@@ -123,6 +123,21 @@ Drei unabhängig austauschbare Bausteine: **Collector** (Datenbeschaffung), **Br
 - **UI-Änderungen bei ElevenLabs**: Der Collector kann brechen, wenn ElevenLabs Text-Labels/Struktur der Payouts-Seite ändert. Mitigation: Fehler-Alarmierung statt stiller Ausfall (siehe oben).
 - **iOS-Widget-Aktualität**: kein garantiertes 10-Minuten-Live-Update, siehe Komponente 4.
 
+## Implementierungsstand (autonom umgesetzt)
+
+Der gesamte Code wurde geschrieben und liegt im Repo (`collector/`, `apps-script/`,
+`html-dashboard/`, `ios-app/`, `.github/workflows/collect.yml`) — siehe `README.md` im
+Repo-Root für die Übersicht und die noch verbleibenden, zwingend manuellen Setup-Schritte
+(Logins, Secrets, Xcode-Ausführung).
+
+**Autonome Design-Präzisierung während der Umsetzung:** Der Collector schreibt bewusst
+**nicht** in die bestehende, geschützte Original-Tabelle "ab 2.2025", sondern in zwei neue,
+eigene Tabs (`Automatisiert`, `Status`) innerhalb derselben Spreadsheet-Datei. Grund: Die
+Original-Tabelle ist als "Geschützt" markiert und enthält komplexe, gewachsene
+Formelstrukturen (siehe oben) — ein automatisiertes Schreiben hinein hätte ein unnötiges
+Risiko dargestellt. Die neuen Tabs sind strukturell einfacher (reine Werte statt Formeln) und
+vollständig unter Kontrolle des Collectors, ohne die Originaldaten zu gefährden.
+
 ## Offene Punkte für die Umsetzungsphase (nicht Teil dieses Designs)
 
 - Formel für Spalte M (Ø $/Tag je Monat) war in Stichproben leer und ist final zu bestätigen, sobald reale Monatswechsel-Zeilen auftreten — nicht architekturrelevant, wird beim Schreiben des Collectors mit Fallback-Logik (`L / Anzahl Tage im Zeitraum`) abgesichert.

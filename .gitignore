@@ -1,0 +1,11 @@
+node_modules/
+collector/storageState.json
+collector/.env
+*.log
+.DS_Store
+service-account.json
+*.p8
+*.mobileprovision
+xcuserdata/
+DerivedData/
+.build/
