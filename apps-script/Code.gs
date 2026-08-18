@@ -98,6 +98,10 @@ function doGet(e) {
     thisWeekUsdNet: round2(thisWeekUsdNet),
     avgDailyUsd: avgDailyUsd === null ? null : round2(avgDailyUsd),
     thisWeekEur: weeklySorted.length ? weeklySorted[weeklySorted.length - 1].eur : 0,
+    // Direkter Vorwochen-Wert (die volle EUR-Summe der letzten abgeschlossenen Woche,
+    // ohne Tages-Offset-Angleichung) - fuer die Vergleichszeile unter Karte 4
+    // (Nutzer-Feedback 18.08.2026: "die direkt Vorwoche als Vergleich darunter").
+    lastWeekEurDirect: weeklySorted.length >= 2 ? weeklySorted[weeklySorted.length - 2].eur : null,
     thisWeekVsLastWeekPct: weekOverWeek ? weekOverWeek.pct : null, // null, falls nicht berechenbar (z.B. erste Woche)
     lastWeekUsdSameOffset: weekOverWeek ? weekOverWeek.lastWeekUsd : null,
     lastWeekAvgDailyUsd: weekOverWeek ? weekOverWeek.lastWeekAvgDailyUsd : null,

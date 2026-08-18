@@ -115,6 +115,7 @@
           <p id="thisWeekEur" class="text-2xl font-semibold font-num">—</p>
           <span id="thisWeekPct" class="text-xs font-num font-semibold"></span>
         </div>
+        <p id="thisWeekEurPrev" class="text-xs muted font-num mt-1">&nbsp;</p>
       </div>
       <div class="card p-4">
         <p class="text-xs muted font-medium">Dieser Monat (EUR)</p>
@@ -222,6 +223,10 @@ function render(data) {
       : " ";
 
   document.getElementById("thisWeekEur").textContent = fmtEur(data.thisWeekEur);
+  document.getElementById("thisWeekEurPrev").textContent =
+    data.lastWeekEurDirect !== null && data.lastWeekEurDirect !== undefined
+      ? `Vorwoche: ${fmtEur(data.lastWeekEurDirect)}`
+      : " ";
   document.getElementById("thisMonthEur").textContent = fmtEur(data.thisMonthEur);
   document.getElementById("thisMonthEurPrev").textContent =
     data.lastMonthEur !== null && data.lastMonthEur !== undefined
@@ -270,32 +275,50 @@ function isoWeekKey(dateStr) {
   return d.toISOString().slice(0, 10);
 }
 
-// "Tag": echte Stunden-Kurve heute vs. gestern aus den Intraday-Snapshots (alle
-// 10 Minuten, siehe collect.js). Solange die Erfassung noch keine 2 Kalendertage
-// abdeckt, liefert dies null (Feature ist neu, Historie waechst erst).
-function buildDayCompare(intraday) {
-  if (!intraday.length) return null;
-  const byDate = {};
-  intraday.forEach((p) => {
-    const dateKey = new Date(p.ts).toISOString().slice(0, 10);
-    (byDate[dateKey] = byDate[dateKey] || []).push(p);
-  });
-  const dateKeys = Object.keys(byDate).sort();
-  if (dateKeys.length < 2) return null;
-  const today = byDate[dateKeys[dateKeys.length - 1]];
-  const yesterday = byDate[dateKeys[dateKeys.length - 2]];
-  const hourLabels = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, "0")}:00`);
-  const bucketByHour = (pts) => {
-    const arr = Array(24).fill(null);
-    pts.forEach((p) => (arr[new Date(p.ts).getHours()] = p.usd));
+// "Tag": echte Stunden-Kurve aus den Intraday-Snapshots (alle 10 Minuten, siehe
+// collect.js) - NICHT an Mitternacht ausgerichtet, sondern an der woechentlichen
+// ElevenLabs-Ablesezeit (Nutzer-Feedback: "heute ab 11:59 bis morgen 11:58 sind
+// 24h"). Das aktuelle 24h-Fenster laeuft vom letzten Ablesezeit-Zeitpunkt bis
+// jetzt, das Vergleichsfenster ist exakt die 24h davor - beide auf derselben
+// "Stunden seit Fensterbeginn"-Achse ausgerichtet. Liefert null, solange die
+// Intraday-Erfassung noch keine volle Vorperiode abdeckt (Feature ist neu).
+function buildDayCompare(intraday, readoutTimeWeeklyIso) {
+  if (!intraday.length || !readoutTimeWeeklyIso) return null;
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const anchorMs = new Date(readoutTimeWeeklyIso).getTime();
+  const windowsElapsed = Math.floor((Date.now() - anchorMs) / DAY_MS);
+  const windowStart = anchorMs + windowsElapsed * DAY_MS;
+  const prevWindowStart = windowStart - DAY_MS;
+
+  const pointsInWindow = (start) =>
+    intraday.filter((p) => {
+      const t = new Date(p.ts).getTime();
+      return t >= start && t < start + DAY_MS;
+    });
+  const thisWindow = pointsInWindow(windowStart);
+  const lastWindow = pointsInWindow(prevWindowStart);
+  if (!lastWindow.length) return null;
+
+  const labels = Array.from({ length: 25 }, (_, h) =>
+    new Date(windowStart + h * 60 * 60 * 1000).toLocaleTimeString("de-DE", {
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  );
+  const bucketByOffset = (pts, start) => {
+    const arr = Array(25).fill(null);
+    pts.forEach((p) => {
+      const h = Math.round((new Date(p.ts).getTime() - start) / (60 * 60 * 1000));
+      if (h >= 0 && h <= 24) arr[h] = p.usd;
+    });
     return arr;
   };
   return {
-    labels: hourLabels,
-    thisValues: bucketByHour(today),
-    lastValues: bucketByHour(yesterday),
-    thisLabel: "Heute",
-    lastLabel: "Gestern",
+    labels,
+    thisValues: bucketByOffset(thisWindow, windowStart),
+    lastValues: bucketByOffset(lastWindow, prevWindowStart),
+    thisLabel: "Aktuelle 24h (ab Ablesezeit)",
+    lastLabel: "Vortag (gleicher Zeitraum)",
   };
 }
 
@@ -391,7 +414,7 @@ function updateChart(range) {
   } else {
     const cmp =
       range === "daily"
-        ? buildDayCompare(latestData.history?.intraday ?? [])
+        ? buildDayCompare(latestData.history?.intraday ?? [], latestData.readoutTimeWeekly)
         : range === "weekly"
         ? buildWeekCompare(latestData.history?.daily ?? [])
         : range === "monthly"
