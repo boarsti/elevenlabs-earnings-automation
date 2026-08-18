@@ -20,10 +20,11 @@ async function main() {
   await page.goto("https://elevenlabs.io/app/voices-earnings/payouts");
 
   console.log("\nBitte im geöffneten Browser-Fenster bei ElevenLabs einloggen.");
-  console.log("Warte, bis die Payouts-Seite mit 'Current Period' sichtbar ist,");
-  console.log("dann hier im Terminal einfach ENTER drücken.\n");
+  console.log("Das Skript erkennt automatisch, wenn die Payouts-Seite mit 'Current Period'");
+  console.log("sichtbar ist, und speichert dann die Session (Timeout: 10 Minuten).\n");
 
-  await waitForEnter();
+  await page.getByText("Current Period", { exact: true }).waitFor({ timeout: 10 * 60 * 1000 });
+  await page.waitForTimeout(2_000); // kurze Karenz, bis alles vollstaendig geladen ist
 
   await context.storageState({ path: STATE_PATH });
   console.log(`Session gespeichert unter: ${STATE_PATH}`);
@@ -31,16 +32,6 @@ async function main() {
   console.log("Für GitHub Actions: Inhalt als Secret ELEVENLABS_STORAGE_STATE hinterlegen (siehe README).");
 
   await browser.close();
-}
-
-function waitForEnter() {
-  return new Promise((resolve) => {
-    process.stdin.resume();
-    process.stdin.once("data", () => {
-      process.stdin.pause();
-      resolve();
-    });
-  });
 }
 
 main().catch((err) => {
