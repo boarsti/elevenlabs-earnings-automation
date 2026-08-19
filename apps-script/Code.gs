@@ -7,7 +7,7 @@
  * Web App ("Wer hat Zugriff": Jeder). Siehe README.md in diesem Ordner.
  */
 
-const ACCESS_TOKEN = "HIER_EIGENES_GEHEIMES_TOKEN_EINTRAGEN"; // siehe README
+const ACCESS_TOKEN = "366e636fffda2e793053addd242edc3f"; // erzeugt am 18.08.2026
 const STALE_AFTER_MINUTES = 30;
 
 function doGet(e) {

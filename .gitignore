@@ -9,3 +9,8 @@ service-account.json
 xcuserdata/
 DerivedData/
 .build/
+
+# Persoenliche Recherche-/Strategiedokumente - gehoeren nicht ins (oeffentliche) Repo
+# (Sicherheits-Audit 19.08.2026)
+1st prompt.rtf
+ChatGPT-*.txt
