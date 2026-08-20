@@ -50,15 +50,26 @@ async function main() {
   }
 
   const fxRate = await getUsdToEurRate();
-  const today = todayInBerlin();
-
-  const dailyRows = await readDailyRows(sheets, SPREADSHEET_ID);
-  const sortedRows = [...dailyRows].sort((a, b) => (a.Datum < b.Datum ? -1 : 1));
 
   // "Neue Woche"-Erkennung: History-Zeilenanzahl hat sich seit dem letzten Lauf erhöht
   // (der vorherige "Pending"-Eintrag wurde final "Paid", ein neuer "Pending"-Eintrag kam hinzu).
   const previousStatus = await readStatus(sheets, SPREADSHEET_ID);
   const lastKnownCount = Number(previousStatus.historyRowCount || 0);
+
+  // Abrechnungstag statt Kalendertag (Nutzer-Feedback 21.08.2026: "die Balken muessen
+  // 24h ab dem Auszahlungszeitpunkt berechnet werden, nicht um Mitternacht" - kurz
+  // nach Mitternacht zeigte TagesumsatzUSD faelschlich fast 0, weil der Kalendertag
+  // gerade erst begonnen hatte, obwohl die echte Abrechnungsperiode noch bis zur
+  // taeglichen Ablesezeit lief). "today" faellt auf den VORHERIGEN Kalendertag zurueck,
+  // solange die taegliche Ablesezeit (Uhrzeit von readoutTimeWeekly, jeden Tag
+  // angewendet) noch nicht erreicht wurde - identische Logik wie
+  // computeDailyAnchorMs() in apps-script/Code.gs fuer "Seit gestern". Ab jetzt teilen
+  // sich Collector und Dashboard denselben Tages-Anker (vorher: Collector = Mitternacht,
+  // Dashboard-Feld1 = Ablesezeit - liefen auseinander).
+  const today = billingDayInBerlin(previousStatus.readoutTimeWeekly);
+
+  const dailyRows = await readDailyRows(sheets, SPREADSHEET_ID);
+  const sortedRows = [...dailyRows].sort((a, b) => (a.Datum < b.Datum ? -1 : 1));
   const currentCount = earnings.history.length;
   const isNewWeek = lastKnownCount === 0 || currentCount > lastKnownCount;
 
@@ -184,6 +195,25 @@ async function main() {
 function todayInBerlin() {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }).format(new Date());
   return parts; // "en-CA" liefert direkt "YYYY-MM-DD"
+}
+// Siehe Kommentar bei der Verwendung oben. Bootstrap-Fall (noch keine Ablesezeit
+// bekannt, z.B. beim allerersten Lauf): Kalendertag als Fallback.
+function billingDayInBerlin(readoutIso) {
+  const todayCalendar = todayInBerlin();
+  if (!readoutIso) return todayCalendar;
+  const timeFmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Berlin",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const readoutTimeOfDay = timeFmt.format(new Date(readoutIso));
+  const nowTimeOfDay = timeFmt.format(new Date());
+  if (nowTimeOfDay >= readoutTimeOfDay) return todayCalendar;
+  const d = new Date(`${todayCalendar}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
 }
 function daysBetween(a, b) {
   const ms = new Date(b).getTime() - new Date(a).getTime();
