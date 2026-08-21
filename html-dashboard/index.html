@@ -259,10 +259,17 @@
           <span class="info-label muted">Prognose Ø/Tag (Woche)</span>
           <span id="avgDailyProjection" class="info-value muted">&nbsp;</span>
         </div>
-        <!-- Platzhalterzeilen fuer Zeilenausrichtung mit Feld2 (Nutzer-Anforderung
-             21.08.2026, siehe Feld1 oben fuer denselben Grund). -->
-        <p class="text-xs muted font-num mt-0.5" aria-hidden="true">&nbsp;</p>
-        <p class="text-xs muted font-num mt-0.5" aria-hidden="true">&nbsp;</p>
+        <!-- Nutzer-Anforderung 21.08.2026: langfristige Ø/Tag-Vergleiche + Trend
+             gegenueber dem aktuellen Wochendurchschnitt. Ersetzen die bisherigen
+             Platzhalterzeilen (5 echte Zeilen jetzt statt 3+2 Platzhalter). -->
+        <div class="info-row text-xs font-num mt-0.5">
+          <span class="info-label muted">Ø/Tag letzte 3 Monate</span>
+          <span id="avgDaily3Month" class="info-value muted">&nbsp;</span>
+        </div>
+        <div class="info-row text-xs font-num mt-0.5">
+          <span class="info-label muted">Ø/Tag 12 Monate</span>
+          <span id="avgDaily12Month" class="info-value muted">&nbsp;</span>
+        </div>
       </div>
     </section>
 
@@ -578,14 +585,13 @@ function fmtPct(n) {
   return `${up ? "▲" : "▼"} ${Math.abs(n).toFixed(1)}% ggü. Vorwoche`;
 }
 
-// Bugfix (21.08.2026, Nutzer-Feedback: "die Welle im Header ist bei Negativtrend
-// blau und bei Aufwaertstrend orange, das ist falsch"): das bisherige "heiss/kalt"-
-// Schema (Orange=Anstieg, Blau=Rueckgang, an die Chart-Vergleichslinien angelehnt,
-// siehe Nutzer-Feedback 19.08.2026) war inkonsistent mit dem Sparkline-Pfeil im
-// Header, der schon immer Gruen/Amber-Deep nutzte - jetzt ueberall einheitlich
-// Gruen = Anstieg, Amber-Deep (dunkles Orange-Rot) = Rueckgang.
-const TREND_UP_COLOR = "#3FBF6F";
-const TREND_DOWN_COLOR = "#B35A0A";
+// Farbschema "heiss/kalt" fest im Design verankert (Nutzer-Anforderung 21.08.2026:
+// "Ein Anstieg ist heiss = orange, ein Abstieg ist blau = kalt. Bitte im Design fest
+// verankern!!" - eine kurze Zwischenversion hatte stattdessen Gruen/Amber-Deep
+// genutzt, das war falsch und wurde wieder zurueckgesetzt). Gilt fuer alle
+// Trend-Anzeigen: Header-Sparkline, Feld4-6-Pillen, Auszahlungs-Tabellenzeilen.
+const TREND_UP_COLOR = "#FF8A1F";
+const TREND_DOWN_COLOR = "#3355FF";
 
 // ISO-Wochenschluessel ("2025-W34") inkl. korrektem ISO-Wochenjahr (kann an
 // Jahresgrenzen vom Kalenderjahr abweichen) - fuer den exakten "gleiche KW,
@@ -615,6 +621,18 @@ function applyTrendText(elId, value) {
   const el = document.getElementById(elId);
   if (!el) return;
   el.style.color = trendColor(value) ?? "";
+}
+
+// Durchschnittlicher Tagesumsatz (USD) ueber die letzten "days" Tage (Nutzer-
+// Anforderung 21.08.2026: "Ø/Tag letzte 3 Monate"/"Ø/Tag 12 Monate" in Feld3).
+function computeAvgDailyOverDays(dailyRows, days) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const cutoffIso = cutoff.toISOString().slice(0, 10);
+  const vals = dailyRows
+    .filter((d) => d.date >= cutoffIso && d.tagesumsatzUsd !== null && d.tagesumsatzUsd !== undefined)
+    .map((d) => d.tagesumsatzUsd);
+  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
 }
 
 // "Bestwert"-Rekorde ueber die volle Historie (Insights, Nutzer-Feedback 19.08.2026).
@@ -1102,9 +1120,10 @@ function render(data) {
   const thisWeekEurEstimateEl = document.getElementById("thisWeekEurEstimate");
   thisWeekEurEstimateEl.textContent =
     data.fxRateUsdEur ? fmtEur(data.thisWeekUsdNet * data.fxRateUsdEur) : "—";
-  // Kein Trend, sondern reine Hervorhebung in der Marken-Akzentfarbe - deshalb bewusst
-  // NICHT TREND_UP_COLOR (die jetzt Gruen ist, siehe Bugfix 21.08.2026 oben), sonst
-  // wuerde diese Live-Schaetzung faelschlich gruen wie ein positiver Trend erscheinen.
+  // Kein Trend, sondern reine Hervorhebung in der Marken-Akzentfarbe - bewusst als
+  // eigener Literalwert statt TREND_UP_COLOR referenziert (auch wenn beide aktuell
+  // zufaellig denselben Hex-Wert haben), damit sich beide Bedeutungen unabhaengig
+  // voneinander aendern lassen.
   thisWeekEurEstimateEl.style.color = data.fxRateUsdEur ? "#FF8A1F" : "";
 
   // Aktueller Gesamtwert (Startwert + reale Steigerung seit dem letzten Ablese-
@@ -1161,6 +1180,30 @@ function render(data) {
     ? `~${fmtUsd(projection / 7)}`
     : "—";
   avgDailyProjectionEl.style.color = projection !== null ? "#3355FF" : "";
+
+  // Langfristige Ø/Tag-Vergleiche (Nutzer-Anforderung 21.08.2026: "Ø/Tag letzte 3
+  // Monate" + "Ø/Tag 12 Monate", je mit +/-% ggü. dem aktuellen Wochendurchschnitt
+  // data.avgDailyUsd, der grossen Zahl oben in Feld3).
+  function renderLongTermAvgRow(elId, avgValue) {
+    const el = document.getElementById(elId);
+    if (avgValue === null || avgValue === undefined) {
+      el.textContent = "—";
+      el.style.color = "";
+      return;
+    }
+    if (data.avgDailyUsd === null || data.avgDailyUsd === undefined || avgValue === 0) {
+      el.textContent = fmtUsd(avgValue);
+      el.style.color = "";
+      return;
+    }
+    const pct = ((data.avgDailyUsd - avgValue) / avgValue) * 100;
+    const up = pct >= 0;
+    el.textContent = `${fmtUsd(avgValue)} (${up ? "▲" : "▼"} ${Math.abs(pct).toFixed(0)}%)`;
+    el.style.color = trendColor(pct) ?? "";
+  }
+  const dailyForLongTermAvg = data.history?.daily ?? [];
+  renderLongTermAvgRow("avgDaily3Month", computeAvgDailyOverDays(dailyForLongTermAvg, 90));
+  renderLongTermAvgRow("avgDaily12Month", computeAvgDailyOverDays(dailyForLongTermAvg, 365));
 
   // Sparkline + Trend-Pfeil (letzte 8 Wochen) + Muster-/Notiz-Popover
   renderSparkline(weekly);
