@@ -402,9 +402,17 @@
 // Bildschirmschoner/Sperre: nach 10 Min. Inaktivitaet automatisch aktivieren, PIN
 // "5651" zum Entsperren. Polling/Datenerfassung laufen im Hintergrund unveraendert
 // weiter - nur die Anzeige wird ausgeblendet (Nutzer-Feedback 18.08.2026).
+// Bugfix (21.08.2026, Nutzer-Feedback: "Wenn man die Seite refreshed, dann werden
+// die Inhalte wieder gezeigt"): lastActivityAt lag bisher nur im Arbeitsspeicher und
+// wurde bei JEDEM Seitenaufruf auf "gerade eben" zurueckgesetzt - ein simpler Reload
+// hat die Sperre also komplett ausgehebelt, unabhaengig davon wie lange sie vorher
+// schon aktiv war. Jetzt in localStorage persistiert, damit sie einen Reload
+// ueberlebt.
 const LOCK_PIN = "5651";
 const LOCK_AFTER_MS = 10 * 60 * 1000;
-let lastActivityAt = Date.now();
+const LOCK_STORAGE_KEY = "el_lastActivityAt";
+let lastActivityAt = Number(localStorage.getItem(LOCK_STORAGE_KEY));
+if (!Number.isFinite(lastActivityAt) || lastActivityAt <= 0) lastActivityAt = Date.now();
 let locked = false;
 
 function lockScreen() {
@@ -424,6 +432,7 @@ function tryUnlock() {
     document.getElementById("lockOverlay").style.display = "none";
     input.value = "";
     lastActivityAt = Date.now();
+    localStorage.setItem(LOCK_STORAGE_KEY, String(lastActivityAt));
   } else {
     document.getElementById("pinError").textContent = "Falscher Code";
     input.value = "";
@@ -440,8 +449,14 @@ document.getElementById("pinInput").addEventListener("keydown", (e) => {
     if (!locked) lastActivityAt = Date.now();
   })
 );
+// Sofort beim Laden pruefen, nicht erst nach dem ersten 5s-Intervall - sonst waeren
+// die Inhalte trotz laengst abgelaufener Sperrzeit noch kurz sichtbar.
+if (Date.now() - lastActivityAt > LOCK_AFTER_MS) lockScreen();
 setInterval(() => {
   if (!locked && Date.now() - lastActivityAt > LOCK_AFTER_MS) lockScreen();
+  // lastActivityAt periodisch persistieren statt bei jedem Event (u.a. mousemove) -
+  // synchrone localStorage-Schreibzugriffe bei jeder Mausbewegung waeren unnoetig teuer.
+  if (!locked) localStorage.setItem(LOCK_STORAGE_KEY, String(lastActivityAt));
 }, 5000);
 
 let chart;
@@ -1005,8 +1020,13 @@ function render(data) {
   applyTrendText("thisMonthEurPrev", data.lastMonthEur !== null && data.lastMonthEur !== undefined
     ? data.thisMonthEur - data.lastMonthEur : null);
   document.getElementById("thisYearEur").textContent = fmtEur(data.thisYearEur);
+  // Nutzer-Korrektur 21.08.2026: "nicht 'Vergleich 2025 bis heute' sondern 'Vergleich
+  // zu TT.MM.2025'" - explizites Vorjahresdatum statt nur der Jahreszahl, macht den
+  // exakten Stichtag sichtbar. lastYearSameDayIso = heute minus 1 Kalenderjahr.
+  const lastYearSameDay = new Date();
+  lastYearSameDay.setFullYear(lastYearSameDay.getFullYear() - 1);
   document.getElementById("thisYearEurPrevLabel").textContent =
-    `Vergleich ${new Date().getFullYear() - 1} bis heute`;
+    `Vergleich zu ${fmtFullDate(lastYearSameDay.toISOString())}`;
   document.getElementById("thisYearEurPrev").textContent =
     data.lastYearEurSamePeriod !== null && data.lastYearEurSamePeriod !== undefined
       ? fmtEur(data.lastYearEurSamePeriod)
@@ -1266,12 +1286,18 @@ function buildWeekCompare(daily, weekOffset = 0) {
   const sorted = [...daily].sort((a, b) => (a.date < b.date ? -1 : 1));
   const anchorIdx = [];
   sorted.forEach((r, i) => { if (r.isWeekAnchor) anchorIdx.push(i); });
+  if (!anchorIdx.length) return null; // noch gar kein Ankertag bekannt
   const weekIdx = anchorIdx.length - 1 - weekOffset;
-  if (weekIdx < 1) return null; // braucht eine volle Vorwoche zum Vergleich
+  if (weekIdx < 0) return null; // weiter zurueckgeblaettert als Anker bekannt sind
   const thisStart = anchorIdx[weekIdx];
   const thisEndExclusive = weekIdx + 1 < anchorIdx.length ? anchorIdx[weekIdx + 1] : sorted.length;
   const thisWeek = sorted.slice(thisStart, thisEndExclusive);
-  const lastWeek = sorted.slice(anchorIdx[weekIdx - 1], thisStart);
+  // Vorwoche fehlt, solange nur EIN Anker bekannt ist (aktuell der Fall wegen der
+  // Datenluecke Aug 1-17, siehe CHANGELOG) - "diese Woche" wird trotzdem gezeigt,
+  // Vorwoche-Linie/-Werte bleiben dann einfach leer (Nutzer-Feedback 21.08.2026: "das
+  // Koordinatensystem soll IMMER am Schnitttag anfangen" - durfte nicht an der
+  // fehlenden Vorwoche scheitern).
+  const lastWeek = weekIdx >= 1 ? sorted.slice(anchorIdx[weekIdx - 1], thisStart) : null;
   const len = 7;
   const dayNamesSun = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
   const labelFor = (row) => {
@@ -1279,7 +1305,7 @@ function buildWeekCompare(daily, weekOffset = 0) {
     const d = new Date(row.date + "T00:00:00Z");
     return `${dayNamesSun[d.getUTCDay()]} ${String(d.getUTCDate()).padStart(2, "0")}.${String(d.getUTCMonth() + 1).padStart(2, "0")}.`;
   };
-  const labels = Array.from({ length: len }, (_, i) => labelFor(thisWeek[i]) || labelFor(lastWeek[i]));
+  const labels = Array.from({ length: len }, (_, i) => labelFor(thisWeek[i]) || labelFor(lastWeek?.[i]));
   // Vorjahr: die Woche mit Ankertag exakt 364 Tage (52 Wochen) vor dieser Woche -
   // gleiche Wochentag-Ausrichtung, damit die Punkte vergleichbar sind (Nutzer-Feedback
   // 19.08.2026: "Vorjahr dagegenstellen, um Trend abzuleiten").
@@ -1291,14 +1317,14 @@ function buildWeekCompare(daily, weekOffset = 0) {
   return {
     labels,
     thisValues: Array.from({ length: len }, (_, i) => thisWeek[i]?.usd ?? null),
-    lastValues: Array.from({ length: len }, (_, i) => lastWeek[i]?.usd ?? null),
+    lastValues: lastWeek ? Array.from({ length: len }, (_, i) => lastWeek[i]?.usd ?? null) : null,
     lastYearValues: lastYearWeek ? Array.from({ length: len }, (_, i) => lastYearWeek[i]?.usd ?? null) : null,
     // Echter Tagesumsatz (nicht der kumulierte Wochenzaehler) je Tag dieser Woche - fuer
     // das Balkendiagramm "Tagesumsatz (diese Woche)" (Nutzer-Feedback 20.08.2026).
     thisWeekDailyUsd: Array.from({ length: len }, (_, i) => thisWeek[i]?.tagesumsatzUsd ?? null),
     // Dieselben Tagesumsaetze fuer Vorwoche und dieselbe KW im Vorjahr - Basis fuer die
     // beiden Referenz-Durchschnittslinien im Balkendiagramm (Nutzer-Feedback 20.08.2026).
-    lastWeekDailyUsd: Array.from({ length: len }, (_, i) => lastWeek[i]?.tagesumsatzUsd ?? null),
+    lastWeekDailyUsd: lastWeek ? Array.from({ length: len }, (_, i) => lastWeek[i]?.tagesumsatzUsd ?? null) : null,
     lastYearWeekDailyUsd: lastYearWeek ? Array.from({ length: len }, (_, i) => lastYearWeek[i]?.tagesumsatzUsd ?? null) : null,
     dayLabels: labels,
     thisWeekMondayIso: thisWeek[0].date,
@@ -1863,7 +1889,12 @@ function updateChart(range) {
       // weil buildWeekCompare() Kalenderwochen (Mo-So) lieferte und die echte Ablesezeit
       // nur nachtraeglich als Linie markiert wurde. Seit dem Umbau auf Abrechnungs-
       // Wochenanker (siehe buildWeekCompare()) sitzt der Anker bereits exakt auf Index 0
-      // - keine Fraktion/Anker-Linie mehr noetig, einfache Kategorie-Achse reicht.
+      // - keine Fraktion mehr noetig, einfache Kategorie-Achse reicht. Die gepunktete
+      // Markierung selbst bleibt (Nutzer-Feedback 21.08.2026: "es fehlen die vertikalen
+      // Linien, die sich pro Abrechnungszeitpunkt verschieben") - jetzt an jedem
+      // Tages-Tick statt an einer Tagesanteil-Fraktion, da jeder Tick bereits exakt der
+      // Ablesezeit (11:59) entspricht.
+      if (range === "weekly") dailyAnchorLines = labels.map((_, i) => i);
       const toXY = (arr) => arr.map((v, i) => ({ x: i + weeklyAnchorFraction, y: v === null || v === undefined ? null : v }));
       // Aktuelle Periode = Amber (durchgezogen, dick), Vorperiode = klares Blau
       // (duenner, gestrichelt) - deutlich unterscheidbar (Nutzer-Feedback 18.08.2026).
@@ -1955,6 +1986,13 @@ function updateChart(range) {
     chartType = "line";
   }
 
+  // Y-Achsen-Einheit je Ansicht (Nutzer-Feedback 21.08.2026: "Es fehlt bei allen
+  // Verlaufs-Koordinatensystemen noch die Beschriftung der y-Achse"). Tag/Woche/Monat
+  // zeigen den USD-Zaehler (GesamtwertUSD, siehe buildDayCompare/buildWeekCompare/
+  // buildMonthCompare), Jahr/Gesamt die EUR-Auszahlungswerte (buildYearCompare/
+  // history.weekly.eur) - daher zwei unterschiedliche Einheiten statt einer fixen.
+  const chartUnitFmt = range === "yearly" || range === "total" ? fmtEur : fmtUsd;
+
   if (chart) chart.destroy();
   // X-Achse: normalerweise Kategorie-Achse (ein Slot pro Label), in der Wochenansicht
   // stattdessen eine numerische Zeit-Achse 0..7 (siehe weeklyTimeAxis oben) - die
@@ -2018,7 +2056,7 @@ function updateChart(range) {
       scales: {
         x: xScaleConfig,
         y: {
-          ticks: { color: "#9aa0c7" },
+          ticks: { color: "#9aa0c7", callback: (v) => chartUnitFmt(v) },
           grid: { color: "rgba(148, 163, 199, 0.35)" },
         },
       },
@@ -2124,7 +2162,7 @@ function updateChart(range) {
           // Jahresvergleich - bei nur einem Dataset (alle anderen Ansichten) ohne
           // Effekt, daher hier fuer alle Balkendiagramme gesetzt statt bedingt.
           x: { stacked: true, ticks: { color: "#9aa0c7", font: { size: 10 }, maxRotation: 0, autoSkip: true }, grid: { display: false } },
-          y: { stacked: true, suggestedMax: barYMax, ticks: { color: "#9aa0c7" }, grid: { color: "rgba(148, 163, 199, 0.35)" } },
+          y: { stacked: true, suggestedMax: barYMax, ticks: { color: "#9aa0c7", callback: (v) => `${fmtThousands(v)} ${unit}` }, grid: { color: "rgba(148, 163, 199, 0.35)" } },
         },
       },
     });

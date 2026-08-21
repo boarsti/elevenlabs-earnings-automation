@@ -292,15 +292,21 @@ function computeWeekOverWeek(daily, weeklySorted, todayIso) {
     lastWeekAvgDailyUsd: round2(lastVal / (daysElapsed + 1)),
   };
 }
+// Bugfix (21.08.2026, Nutzer-Korrektur am Feld6-Label "Vergleich zu TT.MM.2025" statt
+// "Vergleich 2025 bis heute"): der Cutoff verglich bisher nur auf Monatsebene (ganzer
+// August 2025 vs. bisheriger August 2026) statt auf den exakten Tag - das neue,
+// praezise Label haette sonst eine ungenauere Zahl daneben stehen gehabt (zu hoch,
+// weil spaetere August-Tage des Vorjahrs mitgezaehlt wurden, die 2026 noch gar nicht
+// erreicht sind). Jetzt Tag-genauer "MM-DD"-String-Vergleich.
 function computeLastYearSamePeriodEur(weekly, todayIso) {
   const lastYear = String(Number(todayIso.slice(0, 4)) - 1);
-  const cutoffMonth = todayIso.slice(5, 7);
+  const cutoffMonthDay = todayIso.slice(5); // "MM-DD"
   let sum = 0;
   let found = false;
   weekly.forEach((r) => {
     if (!r.DatumIso) return;
     const berlinDate = Utilities.formatDate(new Date(r.DatumIso), "Europe/Berlin", "yyyy-MM-dd");
-    if (berlinDate.slice(0, 4) === lastYear && berlinDate.slice(5, 7) <= cutoffMonth) {
+    if (berlinDate.slice(0, 4) === lastYear && berlinDate.slice(5) <= cutoffMonthDay) {
       sum += Number(r.BetragEUR || 0);
       found = true;
     }
