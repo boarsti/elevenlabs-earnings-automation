@@ -212,7 +212,7 @@
         <p id="thisWeekUsd" class="text-3xl font-display font-black font-num text-center text-amber">0,00 $</p>
         <div class="mt-2"></div>
         <div class="info-row text-xs font-num mt-0.5">
-          <span class="info-label muted">Vorwoche</span>
+          <span class="info-label muted" title="Wert aus der Vorwoche zum exakt gleichen relativen Zeitpunkt (gleiche Anzahl Tage seit Wochenstart)">Vorwoche gleicher Zeitraum:</span>
           <span id="thisWeekUsdPrev" class="info-value muted">&nbsp;</span>
         </div>
         <div class="info-row text-xs font-num mt-0.5">
@@ -237,7 +237,7 @@
         <p id="avgDaily" class="text-3xl font-display font-black font-num text-center">0,00 $</p>
         <div class="mt-2"></div>
         <div class="info-row text-xs font-num mt-0.5">
-          <span class="info-label muted">Vorwoche</span>
+          <span class="info-label muted" title="Ø/Tag der Vorwoche, berechnet aus derselben Anzahl Tage seit Wochenstart wie diese Woche">Vorwoche gleicher Zeitraum:</span>
           <span id="avgDailyPrev" class="info-value muted">&nbsp;</span>
         </div>
         <div class="info-row text-xs font-num mt-0.5">
@@ -518,6 +518,16 @@ function fmtFullDate(iso) {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("de-DE", { timeZone: "Europe/Berlin", day: "2-digit", month: "2-digit", year: "numeric" });
+}
+// Kurzform "TT.MM.JJ" (2-stelliges Jahr) fuer knappe Klammer-/Inline-Datumsangaben
+// wie "Rekord Tag"/"Rekord Woche"/"Progn. bis" (Nutzer-Korrektur 21.08.2026: vorher
+// entweder ganz ohne Jahr ("29.01", mehrdeutig ueber Jahresgrenzen hinweg) oder mit
+// vollem 4-stelligem Jahr, das dort zu viel Platz brauchte).
+function fmtShortDateYY(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("de-DE", { timeZone: "Europe/Berlin", day: "2-digit", month: "2-digit", year: "2-digit" });
 }
 
 function fmtSinceLabel(data) {
@@ -804,7 +814,11 @@ function computeDayVsRecentSameWeekday(data) {
   const avg = sameWeekdayEntries.reduce((sum, d) => sum + d.tagesumsatzUsd, 0) / sameWeekdayEntries.length;
   if (avg === 0) return null;
   const pct = ((data.sinceYesterdayUsd - avg) / avg) * 100;
-  const weekdayLabel = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"][todayWeekday];
+  // Ausgeschriebener Plural statt Kuerzel (Nutzer-Feedback 20./21.08.2026: "was
+  // heisst im Feld1 '... letzte 8 Fr'? das 8 Fr?" - "Fr" allein war als Kuerzel fuer
+  // Freitag neben einer Zahl missverstaendlich, z.B. leicht mit einer Waehrung
+  // verwechselbar).
+  const weekdayLabel = ["Sonntage", "Montage", "Dienstage", "Mittwoche", "Donnerstage", "Freitage", "Samstage"][todayWeekday];
   return { pct, count: sameWeekdayEntries.length, weekdayLabel };
 }
 
@@ -1078,10 +1092,10 @@ function render(data) {
   // Rekorde + Prognose (Insights, Nutzer-Feedback 19.08.2026)
   const { bestDay, bestWeek } = computeRecords(data);
   document.getElementById("bestDayRecord").textContent = bestDay
-    ? `${fmtUsd(bestDay.tagesumsatzUsd)} (${fmtDateTime(bestDay.date).slice(0, 5)})`
+    ? `${fmtUsd(bestDay.tagesumsatzUsd)} (${fmtShortDateYY(bestDay.date)})`
     : "—";
   document.getElementById("bestWeekRecord").textContent = bestWeek
-    ? `${fmtEur(bestWeek.eur)} (${fmtDateTime(bestWeek.weekStart).slice(0, 5)})`
+    ? `${fmtEur(bestWeek.eur)} (${fmtShortDateYY(bestWeek.weekStart)})`
     : "—";
   // computeWeekProjection() liefert den gesamten hochgerechneten Wochenwert (Ist +
   // Restbetrag), nicht nur den Restbetrag - das ist bereits der "aktuelle Gesamt-
@@ -1091,7 +1105,7 @@ function render(data) {
   const projection = computeWeekProjection(data);
   const weekProjectionEl = document.getElementById("weekProjection");
   const projectionEur = projection !== null && data.fxRateUsdEur ? projection * data.fxRateUsdEur : null;
-  const projectionEndLabel = data.nextReadoutEstimateIso ? fmtFullDate(data.nextReadoutEstimateIso) : "Wochenende";
+  const projectionEndLabel = data.nextReadoutEstimateIso ? fmtShortDateYY(data.nextReadoutEstimateIso) : "Wochenende";
   // Label (Datum, links) und Wert (Betrag, rechts) jetzt in einer Zeile als eigene
   // Spans statt uebereinander mit <br> (Nutzer-Anforderung 21.08.2026, 3. Runde:
   // einheitliches Label-links/Wert-rechts-Schema fuer alle Kartenzeilen).
@@ -1282,7 +1296,7 @@ function buildDayCompare(intraday, readoutTimeWeeklyIso, daily) {
 // muss immer am Starttag [der Ablesezeit] starten" - vorher begann die x-Achse bei
 // Montag 0 Uhr und die echte Ablesezeit wurde nur nachtraeglich als Linie
 // eingezeichnet, jetzt sitzt sie exakt auf Index 0).
-function buildWeekCompare(daily, weekOffset = 0) {
+function buildWeekCompare(daily, weekOffset = 0, intraday = [], readoutTimeWeeklyIso = null) {
   const sorted = [...daily].sort((a, b) => (a.date < b.date ? -1 : 1));
   const anchorIdx = [];
   sorted.forEach((r, i) => { if (r.isWeekAnchor) anchorIdx.push(i); });
@@ -1300,12 +1314,51 @@ function buildWeekCompare(daily, weekOffset = 0) {
   const lastWeek = weekIdx >= 1 ? sorted.slice(anchorIdx[weekIdx - 1], thisStart) : null;
   const len = 7;
   const dayNamesSun = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
-  const labelFor = (row) => {
-    if (!row) return "";
-    const d = new Date(row.date + "T00:00:00Z");
+  const weekAnchorDate = new Date(thisWeek[0].date + "T00:00:00Z");
+  // Alle 7 Tages-Labels immer ab dem Wochenanker durchrechnen (nicht nur die bereits
+  // eingetroffenen) - Nutzer-Feedback 21.08.2026: "warum fehlen jetzt die naechsten
+  // Datumsangaben in der x-Achse?", vorher gab es fuer noch nicht erreichte Tage nur
+  // einen leeren String.
+  const labelForOffset = (i) => {
+    const d = new Date(weekAnchorDate);
+    d.setUTCDate(d.getUTCDate() + i);
     return `${dayNamesSun[d.getUTCDay()]} ${String(d.getUTCDate()).padStart(2, "0")}.${String(d.getUTCMonth() + 1).padStart(2, "0")}.`;
   };
-  const labels = Array.from({ length: len }, (_, i) => labelFor(thisWeek[i]) || labelFor(lastWeek?.[i]));
+  const labels = Array.from({ length: len }, (_, i) => labelForOffset(i));
+  // Bugfix (21.08.2026, Nutzer-Feedback: "gestern um 11:59 stand der Wert doch nicht
+  // bei 194,3!! das ist doch falsch"): row.usd (GesamtwertUSD) ist die LETZTE
+  // Ablesung INNERHALB des jeweiligen Abrechnungstags, also naeher am ENDE des Tages
+  // (kurz vor der naechsten Ablesezeit) als an dessen Beginn - der Tag-Label suggeriert
+  // aber den STAND BEI 11:59 START. Fuer die aktuelle Woche (und alle Wochen mit
+  // Intraday-Abdeckung, siehe collect.js "seit 18.08.2026") wird deshalb stattdessen
+  // der erste Intraday-Messwert AB der jeweiligen taeglichen Ablesezeit genutzt - das
+  // ist der tatsaechliche Stand bei Tagesbeginn. Ohne Intraday-Abdeckung (z.B.
+  // Vorjahreswoche) bleibt der bisherige Tages-Endwert als beste verfuegbare Naeherung.
+  const sortedIntraday = [...intraday].sort((a, b) => (a.ts < b.ts ? -1 : 1));
+  const readoutTimeOfDay = readoutTimeWeeklyIso ? new Date(readoutTimeWeeklyIso) : null;
+  const dayBoundaryMs = (dateStr) => {
+    if (!readoutTimeOfDay) return null;
+    const d = new Date(dateStr + "T00:00:00");
+    d.setHours(readoutTimeOfDay.getHours(), readoutTimeOfDay.getMinutes(), 0, 0);
+    return d.getTime();
+  };
+  // Sicherheitsabstand fuer den Intraday-Match: ohne diesen wuerde z.B. eine
+  // Vorjahres-Zeile (2025) auf den allerersten (chronologisch aeltesten) Intraday-
+  // Messwert von 2026 "matchen", weil der zeitlich nach JEDER 2025-Grenze liegt -
+  // Bugfix (21.08.2026), der urspruenglich die Vorjahreslinie faelschlich komplett
+  // flach gezeichnet hat.
+  const MAX_INTRADAY_MATCH_GAP_MS = 2 * 24 * 60 * 60 * 1000;
+  const valueAtDayStart = (row) => {
+    if (!row) return null;
+    const boundaryMs = dayBoundaryMs(row.date);
+    if (boundaryMs !== null) {
+      const firstSample = sortedIntraday.find((p) => new Date(p.ts).getTime() >= boundaryMs);
+      if (firstSample && new Date(firstSample.ts).getTime() - boundaryMs <= MAX_INTRADAY_MATCH_GAP_MS) {
+        return firstSample.usd;
+      }
+    }
+    return row.usd ?? null;
+  };
   // Vorjahr: die Woche mit Ankertag exakt 364 Tage (52 Wochen) vor dieser Woche -
   // gleiche Wochentag-Ausrichtung, damit die Punkte vergleichbar sind (Nutzer-Feedback
   // 19.08.2026: "Vorjahr dagegenstellen, um Trend abzuleiten").
@@ -1316,9 +1369,9 @@ function buildWeekCompare(daily, weekOffset = 0) {
   const lastYearWeek = lastYearStartIdx >= 0 ? sorted.slice(lastYearStartIdx, lastYearStartIdx + len) : null;
   return {
     labels,
-    thisValues: Array.from({ length: len }, (_, i) => thisWeek[i]?.usd ?? null),
-    lastValues: lastWeek ? Array.from({ length: len }, (_, i) => lastWeek[i]?.usd ?? null) : null,
-    lastYearValues: lastYearWeek ? Array.from({ length: len }, (_, i) => lastYearWeek[i]?.usd ?? null) : null,
+    thisValues: Array.from({ length: len }, (_, i) => valueAtDayStart(thisWeek[i])),
+    lastValues: lastWeek ? Array.from({ length: len }, (_, i) => valueAtDayStart(lastWeek[i])) : null,
+    lastYearValues: lastYearWeek ? Array.from({ length: len }, (_, i) => valueAtDayStart(lastYearWeek[i])) : null,
     // Echter Tagesumsatz (nicht der kumulierte Wochenzaehler) je Tag dieser Woche - fuer
     // das Balkendiagramm "Tagesumsatz (diese Woche)" (Nutzer-Feedback 20.08.2026).
     thisWeekDailyUsd: Array.from({ length: len }, (_, i) => thisWeek[i]?.tagesumsatzUsd ?? null),
@@ -1801,7 +1854,7 @@ function updateChart(range) {
       range === "daily"
         ? buildDayCompare(latestData.history?.intraday ?? [], latestData.readoutTimeWeekly, latestData.history?.daily ?? [])
         : range === "weekly"
-        ? buildWeekCompare(latestData.history?.daily ?? [])
+        ? buildWeekCompare(latestData.history?.daily ?? [], 0, latestData.history?.intraday ?? [], latestData.readoutTimeWeekly)
         : range === "monthly"
         ? buildMonthCompare(latestData.history?.daily ?? [])
         : buildYearCompare(latestData.history?.monthly ?? []);
@@ -1888,13 +1941,13 @@ function updateChart(range) {
       // Bis 21.08.2026 lief hier eine numerische Zeit-Achse mit Tagesanteil-Verschiebung,
       // weil buildWeekCompare() Kalenderwochen (Mo-So) lieferte und die echte Ablesezeit
       // nur nachtraeglich als Linie markiert wurde. Seit dem Umbau auf Abrechnungs-
-      // Wochenanker (siehe buildWeekCompare()) sitzt der Anker bereits exakt auf Index 0
-      // - keine Fraktion mehr noetig, einfache Kategorie-Achse reicht. Die gepunktete
-      // Markierung selbst bleibt (Nutzer-Feedback 21.08.2026: "es fehlen die vertikalen
-      // Linien, die sich pro Abrechnungszeitpunkt verschieben") - jetzt an jedem
-      // Tages-Tick statt an einer Tagesanteil-Fraktion, da jeder Tick bereits exakt der
-      // Ablesezeit (11:59) entspricht.
-      if (range === "weekly") dailyAnchorLines = labels.map((_, i) => i);
+      // Wochenanker (siehe buildWeekCompare()) sitzt der Anker bereits exakt auf Index 0.
+      // Kurzzeitig gab es hier zusaetzlich eine eigene gepunktete Linie an jedem
+      // Tages-Tick - die lag aber exakt auf der ohnehin vorhandenen Gitternetzlinie der
+      // Kategorie-Achse und war dadurch nur verwirrend doppelt (Nutzer-Feedback
+      // 21.08.2026: "warum ist jetzt die Tages-0:00-Uhr-Linie orange... alles nicht klar
+      // auf den ersten Blick") - jeder x-Tick IST bereits die Ablesezeit (11:59), eine
+      // zusaetzliche Markierung braucht es dafuer nicht.
       const toXY = (arr) => arr.map((v, i) => ({ x: i + weeklyAnchorFraction, y: v === null || v === undefined ? null : v }));
       // Aktuelle Periode = Amber (durchgezogen, dick), Vorperiode = klares Blau
       // (duenner, gestrichelt) - deutlich unterscheidbar (Nutzer-Feedback 18.08.2026).
