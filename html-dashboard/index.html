@@ -270,11 +270,14 @@
           <p class="text-xs muted font-medium">Vorwoche</p>
         </div>
         <div class="flex justify-between items-baseline mt-0.5">
-          <div class="flex items-baseline gap-2">
-            <p id="thisWeekEur" class="text-xl font-semibold font-num">—</p>
+          <!-- flex-wrap, damit bei langem Trendtext (z.B. "▼ 16.8% ggü. Vorwoche")
+               nur das kleine Pct-Badge umbricht, nicht der EUR-Wert selbst (Nutzer-
+               Feedback 21.08.2026: "IN den EUR-Werten darf kein Zeilenumbruch sein"). -->
+          <div class="flex items-baseline gap-2" style="flex-wrap: wrap;">
+            <p id="thisWeekEur" class="text-xl font-semibold font-num" style="white-space: nowrap;">—</p>
             <span id="thisWeekPct" class="text-xs font-num font-semibold"></span>
           </div>
-          <p id="thisWeekEurPrev" class="text-xl font-semibold font-num muted">&nbsp;</p>
+          <p id="thisWeekEurPrev" class="text-xl font-semibold font-num muted" style="white-space: nowrap;">&nbsp;</p>
         </div>
       </div>
       <div id="cardMonth" class="card p-3">
@@ -1972,16 +1975,19 @@ function updateChart(range) {
 
     if (cmp) {
       labels = cmp.labels;
-      // Bis 21.08.2026 lief hier eine numerische Zeit-Achse mit Tagesanteil-Verschiebung,
-      // weil buildWeekCompare() Kalenderwochen (Mo-So) lieferte und die echte Ablesezeit
-      // nur nachtraeglich als Linie markiert wurde. Seit dem Umbau auf Abrechnungs-
-      // Wochenanker (siehe buildWeekCompare()) sitzt der Anker bereits exakt auf Index 0
-      // - die gepunktete Ankerlinie an jedem Tages-Tick bleibt trotzdem (Nutzer-Feedback
-      // 21.08.2026: "warum ist die 11:59-Linie verschwunden ... das ist wichtig" - eine
-      // kurze Zwischenversion hatte sie entfernt, weil sie exakt auf der ohnehin
-      // vorhandenen Gitternetzlinie lag, das war aber nicht gewuenscht) - macht explizit
-      // sichtbar, dass jeder Datenpunkt exakt auf der taeglichen Ablesezeit (11:59) sitzt.
-      if (range === "weekly") dailyAnchorLines = labels.map((_, i) => i);
+      // Nutzer-Entscheidung 21.08.2026 (nach laengerer Klaerung, siehe Chat): x-Achse
+      // im Wochenchart bleibt kalendertag-verankert (0:00-Raster, Datumslabel =
+      // Kalendertag), die Datenpunkte selbst sitzen aber NICHT auf der 0:00-Linie,
+      // sondern versetzt an ihrer echten Position innerhalb des Kalendertags - der
+      // taeglichen Ablesezeit (11:59), weil erst dann der Wert bei ElevenLabs
+      // feststeht ("nach Adam und Riese keine 24 Stunden" waeren es sonst). Die
+      // Datengruppierung selbst (buildWeekCompare, Abrechnungstag-basiert) bleibt
+      // unveraendert - nur die visuelle Positionierung im Chart aendert sich hier.
+      weeklyTimeAxis = range === "weekly";
+      if (weeklyTimeAxis) {
+        weeklyAnchorFraction = computeAnchorFraction(latestData.readoutTimeWeekly);
+        dailyAnchorLines = labels.map((_, i) => i + weeklyAnchorFraction);
+      }
       const toXY = (arr) => arr.map((v, i) => ({ x: i + weeklyAnchorFraction, y: v === null || v === undefined ? null : v }));
       // Aktuelle Periode = Amber (durchgezogen, dick), Vorperiode = klares Blau
       // (duenner, gestrichelt) - deutlich unterscheidbar (Nutzer-Feedback 18.08.2026).
@@ -2033,7 +2039,7 @@ function updateChart(range) {
         datasets.push({
           label: cmp.lastYearLabel,
           data: weeklyTimeAxis
-            ? [0, 1, 2, 3, 4, 5, 6].map((i) => ({ x: i + weeklyAnchorFraction, y: cmp.lastYearRefValue }))
+            ? labels.map((_, i) => ({ x: i + weeklyAnchorFraction, y: cmp.lastYearRefValue }))
             : labels.map(() => cmp.lastYearRefValue),
           borderColor: "#9aa0c7",
           backgroundColor: "#9aa0c7",
@@ -2089,7 +2095,7 @@ function updateChart(range) {
     ? {
         type: "linear",
         min: 0,
-        max: 7,
+        max: labels.length,
         ticks: {
           stepSize: 1,
           color: "#9aa0c7",

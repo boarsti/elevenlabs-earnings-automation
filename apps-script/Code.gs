@@ -122,7 +122,7 @@ function computeSummary() {
   const thisMonthEur = (monthlyAgg.find((m) => m.month === currentMonthKey) || {}).eur || 0;
   const lastMonthRow = [...monthlyAgg].reverse().find((m) => m.month < currentMonthKey);
   const lastMonthEur = lastMonthRow ? lastMonthRow.eur : null;
-  const weekOverWeek = computeWeekOverWeek(daily, weeklySorted, todayIso);
+  const weekOverWeek = computeWeekOverWeek(daily, weeklySorted, todayIso, intradaySorted);
   const thisWeekStartIso = weeklySorted.length ? Utilities.formatDate(new Date(weeklySorted[weeklySorted.length - 1].weekStart), "Europe/Berlin", "yyyy-MM-dd") : null;
   const periodStartedToday = thisWeekStartIso === todayIso;
   const avgDailyUsd = periodStartedToday ? null : Number(todayRow?.DurchschnittUSD_Woche || 0);
@@ -256,12 +256,36 @@ function buildPeriodAggregate(weekly, sliceLen) {
   const key = sliceLen === 4 ? "year" : "month";
   return Object.entries(byPeriod).map(([period, v]) => ({ [key]: period, eur: round2(v.sumEur), avgEur: round2(v.sumEur / v.count) })).sort((a, b) => (a[key] < b[key] ? -1 : 1));
 }
-function computeWeekOverWeek(daily, weeklySorted, todayIso) {
+function computeWeekOverWeek(daily, weeklySorted, todayIso, intradaySorted) {
   if (weeklySorted.length < 2) return null;
-  const thisWeekStart = Utilities.formatDate(new Date(weeklySorted[weeklySorted.length - 1].weekStart), "Europe/Berlin", "yyyy-MM-dd");
-  const lastWeekStart = Utilities.formatDate(new Date(weeklySorted[weeklySorted.length - 2].weekStart), "Europe/Berlin", "yyyy-MM-dd");
+  const thisWeekRolloverIso = weeklySorted[weeklySorted.length - 1].weekStart;
+  const lastWeekRolloverIso = weeklySorted[weeklySorted.length - 2].weekStart;
+  const thisWeekStart = Utilities.formatDate(new Date(thisWeekRolloverIso), "Europe/Berlin", "yyyy-MM-dd");
+  const lastWeekStart = Utilities.formatDate(new Date(lastWeekRolloverIso), "Europe/Berlin", "yyyy-MM-dd");
   const daysElapsed = daysBetweenIso(thisWeekStart, todayIso);
   const lastWeekSameOffsetDate = addDaysIso(lastWeekStart, daysElapsed);
+  // Stundengenaue Rekonstruktion via Intraday-Messwerte (Nutzer-Anforderung
+  // 21.08.2026: "das muss genau auf die Stunde abgestimmt sein, sonst verwirrt dieser
+  // Wert" - bisher war der Vergleich nur tagesgenau: "heute" (live) gegen den
+  // SPAETESTEN Messwert des Vorwochen-Offset-Tags, was je nach Tageszeit stark
+  // auseinanderlaufen kann). Nur nutzbar, sobald die Intraday-Historie (seit
+  // 18.08.2026) sowohl den Vorwochen-Start als auch den Zielzeitpunkt abdeckt - fuer
+  // aeltere Wochen bleibt der tagesgenaue Fallback unten die einzige Option, wird
+  // sich also automatisch verbessern, sobald genug Intraday-Historie vorliegt.
+  function preciseLastVal() {
+    if (!intradaySorted || !intradaySorted.length) return null;
+    const thisRolloverMs = new Date(thisWeekRolloverIso).getTime();
+    const lastRolloverMs = new Date(lastWeekRolloverIso).getTime();
+    const elapsedMs = Date.now() - thisRolloverMs;
+    const targetMs = lastRolloverMs + elapsedMs;
+    const firstIntradayMs = new Date(intradaySorted[0].ts).getTime();
+    if (lastRolloverMs < firstIntradayMs || targetMs < firstIntradayMs) return null;
+    const baseline = valueAtOrBefore(intradaySorted, lastRolloverMs);
+    const atTarget = valueAtOrBefore(intradaySorted, targetMs);
+    if (baseline === null || atTarget === null) return null;
+    const delta = atTarget - baseline;
+    return delta >= 0 ? delta : null;
+  }
   // Sucht bei fehlendem/leerem WochenumsatzUSD am exakten Vorwochen-Offset-Tag im
   // +/-2-Tage-Fenster nach der naechstgelegenen Zeile mit einem echten Wert - macht
   // den Vergleich robust gegen einzelne Datenluecken im Sheet (Nutzer-Feedback
@@ -311,12 +335,15 @@ function computeWeekOverWeek(daily, weeklySorted, todayIso) {
     const delta = targetVal - baselineVal;
     return delta >= 0 ? delta : null;
   }
-  const lastRow = findValidRow(lastWeekSameOffsetDate);
-  let lastVal = lastRow ? Number(lastRow.WochenumsatzUSD || 0) : 0;
-  if (!lastRow || lastVal === 0) {
-    const reconstructed = reconstructWeekCumulative(lastWeekStart, daysElapsed);
-    if (reconstructed === null || reconstructed <= 0) return null;
-    lastVal = reconstructed;
+  let lastVal = preciseLastVal();
+  if (lastVal === null) {
+    const lastRow = findValidRow(lastWeekSameOffsetDate);
+    lastVal = lastRow ? Number(lastRow.WochenumsatzUSD || 0) : 0;
+    if (!lastRow || lastVal === 0) {
+      const reconstructed = reconstructWeekCumulative(lastWeekStart, daysElapsed);
+      if (reconstructed === null || reconstructed <= 0) return null;
+      lastVal = reconstructed;
+    }
   }
   const thisRow = daily.find((r) => r.Datum === todayIso);
   const thisVal = Number(thisRow?.WochenumsatzUSD || 0);
