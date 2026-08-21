@@ -88,7 +88,30 @@ async function main() {
     : Number(weekAnchorRow?.Anfangsguthaben_USD ?? 0);
 
   const weekAnchorDate = isNewWeek ? today : weekAnchorRow?.Datum ?? today;
-  const daysElapsedThisWeek = Math.max(1, daysBetween(weekAnchorDate, today) + 1);
+
+  // ECHTE Ablesezeit von ElevenLabs (nicht die Uhrzeit des Collector-Laufs!) - siehe
+  // Bugfix vom 18.08.2026: Nutzer meldete Abweichung (11:59 laut ElevenLabs vs. faelschlich
+  // die Laufzeit des Skripts). latestHistoryEntry.dateIso ist der von ElevenLabs selbst
+  // gemeldete Zeitstempel des aktuellen ("Pending") bzw. letzten Eintrags. Vorgezogen
+  // (frueher erst weiter unten deklariert), weil ab hier schon gebraucht.
+  const latestHistoryEntry = earnings.history[earnings.history.length - 1];
+  const readoutIso = latestHistoryEntry?.dateIso ?? new Date().toISOString();
+  // Praeziser Ablesezeit-Anker fuer den Wochenstart - identisch zu dem Wert, der unten
+  // als "readoutTimeWeekly" ins Sheet geschrieben wird (Status-Tabelle) und den das
+  // Dashboard fuer "berechnet aus XTYh" (siehe index.html, avgDailyBasis) verwendet.
+  // Dieselbe Zeitbasis fuer Anzeige und Berechnung, statt zweier unabhaengiger Werte.
+  const readoutTimeWeeklyForToday = isNewWeek ? readoutIso : weekAnchorRow?.Ablesezeit || readoutIso;
+
+  // Bugfix (21.08.2026, Nutzer-Feedback: "ist in Feld3 der Durchschnittswert richtig
+  // (Berechnet aus 3 vollen Tagen à 24h??) - nein oder?" - war nicht richtig):
+  // daysBetween() zaehlte ganze Kalendertage (Differenz von Datums-STRINGS), der
+  // Divisor sprang also an jeder taeglichen Ablesezeit-Grenze sprunghaft um 1 nach
+  // oben statt kontinuierlich mit der tatsaechlich vergangenen Zeit zu wachsen (z.B.
+  // "3 Tage" schon wenige Minuten nach dem dritten Rollover, obwohl real erst 2 Tage
+  // und ein paar Stunden vergangen waren). Jetzt fraktionale Tage aus der echten
+  // Millisekunden-Differenz zum Wochenanker.
+  const elapsedMsThisWeek = Date.now() - new Date(readoutTimeWeeklyForToday).getTime();
+  const daysElapsedThisWeek = Math.max(elapsedMsThisWeek / 86_400_000, 1 / 24);
 
   const yesterdayRow = [...sortedRows].reverse().find((r) => r.Datum < today);
   const previousE = yesterdayRow ? Number(yesterdayRow.GesamtwertUSD) : weekStartBalance;
@@ -116,7 +139,6 @@ async function main() {
   const wochenumsatzUsd = gesamtwertUsd - weekStartBalance;
   const durchschnittUsd = wochenumsatzUsd / daysElapsedThisWeek;
 
-  const latestHistoryEntry = earnings.history[earnings.history.length - 1];
   const wochenumsatzEurElevenLabs = latestHistoryEntry?.amount ?? "";
   const wochenumsatzEurUeberFx = wochenumsatzUsd * fxRate;
 
@@ -124,12 +146,6 @@ async function main() {
     .slice(-4)
     .reduce((sum, e) => sum + e.amount, 0);
   const avgEurProTagMonat = rollierendeMonatssummeEur / 28; // 4 Wochen a 7 Tage, siehe Design-Doku
-
-  // ECHTE Ablesezeit von ElevenLabs (nicht die Uhrzeit des Collector-Laufs!) - siehe
-  // Bugfix vom 18.08.2026: Nutzer meldete Abweichung (11:59 laut ElevenLabs vs. faelschlich
-  // die Laufzeit des Skripts). latestHistoryEntry.dateIso ist der von ElevenLabs selbst
-  // gemeldete Zeitstempel des aktuellen ("Pending") bzw. letzten Eintrags.
-  const readoutIso = latestHistoryEntry?.dateIso ?? new Date().toISOString();
 
   await upsertDailyRow(sheets, SPREADSHEET_ID, {
     Datum: today,
@@ -173,7 +189,7 @@ async function main() {
     // Bugfix (18.08.2026): "??" faengt nur null/undefined ab, NICHT einen leeren
     // String - eine (manuell oder durch einen Bug) leere Ablesezeit-Zelle wurde dadurch
     // 1:1 durchgereicht und hat readoutTimeWeekly geleert. "||" faengt auch "" ab.
-    readoutTimeWeekly: isNewWeek ? readoutIso : weekAnchorRow?.Ablesezeit || readoutIso,
+    readoutTimeWeekly: readoutTimeWeeklyForToday,
     weekStartBalanceUsd: weekStartBalance,
     currentPeriodUsd: earnings.currentPeriod.amount,
     currentPeriodCurrency: earnings.currentPeriod.currency,
@@ -214,10 +230,6 @@ function billingDayInBerlin(readoutIso) {
   const d = new Date(`${todayCalendar}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() - 1);
   return d.toISOString().slice(0, 10);
-}
-function daysBetween(a, b) {
-  const ms = new Date(b).getTime() - new Date(a).getTime();
-  return Math.round(ms / 86_400_000);
 }
 function round2(n) {
   return Math.round(n * 100) / 100;
