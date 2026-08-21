@@ -42,12 +42,19 @@
     border: 1px solid var(--card-border);
     border-radius: 10px;
     box-shadow: var(--card-shadow);
-    transition: box-shadow 0.15s ease, transform 0.15s ease;
   }
-  .card:hover { box-shadow: var(--card-shadow-hover); transform: translateY(-1px); }
   .font-num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
   .range-btn { transition: background-color 0.15s ease, color 0.15s ease; }
   .range-btn.bg-amber { box-shadow: 0 2px 8px rgba(255, 138, 31, 0.35); }
+  /* Label-links/Wert-rechts-Zeilenschema fuer die Karten-Unterzeilen (Nutzer-
+     Anforderung 21.08.2026: "Text vorne Zeile fuer Zeile linksbuendig ... rechts
+     dann auch rechtsbuendig" - vorher war jede Zeile ein einzelner zentrierter
+     String, dadurch wirkten die Karten "unuebersichtlich"). gap haelt den
+     Mindestabstand auch an der engsten Stelle sichtbar; label truncated per
+     Ellipsis, falls eine Karte extrem schmal wird, statt den Wert zu verdraengen. */
+  .info-row { display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem; }
+  .info-row > .info-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .info-row > .info-value { white-space: nowrap; text-align: right; }
   :root {
     --card-bg: #ffffff;
     --card-border: #e7e9f4;
@@ -55,7 +62,6 @@
     --text: #10173A;
     --muted: #5b6178;
     --card-shadow: 0 1px 2px rgba(16, 23, 58, 0.05), 0 1px 6px rgba(16, 23, 58, 0.06);
-    --card-shadow-hover: 0 4px 16px rgba(16, 23, 58, 0.12);
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -65,103 +71,316 @@
       --text: #f1f2fa;
       --muted: #9aa0c7;
       --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 2px 10px rgba(0, 0, 0, 0.25);
-      --card-shadow-hover: 0 6px 20px rgba(0, 0, 0, 0.35);
     }
   }
   body { background: var(--bg); color: var(--text); }
   .muted { color: var(--muted); }
+  /* Insights-Popup immer weiss/dunkelgrau statt themeabhaengig - im Dark Mode setzte
+     sich die (dunkle) .card-Farbe kaum vom (ebenfalls dunklen) Seitenhintergrund ab
+     (Nutzer-Feedback 20.08.2026). */
+  #insightsPopover { background: #ffffff; color: #2b2f3a; border-color: #e2e4ef; }
+  #insightsPopover .muted { color: #6b7280; }
+
+  /* Lebendiger Hintergrund (adaptiert von thorsten-schmidt.de / KI-Telefonansagen-
+     Studio, Nutzer-Anforderung 21.08.2026): sanft driftende Farbflaechen hinter den
+     Karten, rein CSS-Keyframe-animiert (laeuft automatisch, ohne Maus), zusaetzlich
+     mit dezenter Mausbindung. z-index:-1 auf einem position:fixed-Layer reicht aus,
+     damit er hinter dem normalen Inhaltsfluss von body bleibt (siehe CSS-Stacking-
+     Regeln) - keine Anpassung an .max-w-6xl noetig. */
+  /* inset:-40px statt 0: die Box ist absichtlich groesser als der Viewport, damit
+     sie auch bei maximaler Mausbindungs-Verschiebung (siehe STRENGTH im Script
+     unten) den Viewport immer vollstaendig deckt - sonst rutscht die Kante der Box
+     ueber den Bildschirmrand hinaus und legt eine harte Kante zum reinen
+     Seitenhintergrund frei (Nutzer-Feedback 21.08.2026, Screenshot). */
+  .ambient-bg { position: fixed; inset: -40px; z-index: -1; overflow: hidden; pointer-events: none; will-change: transform; }
+  .ambient-bg .amb-blob { position: absolute; border-radius: 50%; will-change: transform; }
+  .ambient-bg .amb-blob-a { width: 55%; aspect-ratio: 1; left: -12%; top: -18%; background: radial-gradient(circle, rgba(51,85,255,.16), transparent 68%); animation: ambDriftA 36s ease-in-out infinite; }
+  .ambient-bg .amb-blob-b { width: 50%; aspect-ratio: 1; right: -14%; bottom: -20%; background: radial-gradient(circle, rgba(255,138,31,.10), transparent 70%); animation: ambDriftB 44s ease-in-out infinite; animation-delay: -10s; }
+  .ambient-bg .amb-blob-c { width: 38%; aspect-ratio: 1; right: -6%; top: -14%; background: radial-gradient(circle, rgba(31,42,102,.22), transparent 72%); animation: ambDriftC 28s ease-in-out infinite; animation-delay: -16s; }
+  @media (prefers-color-scheme: dark) {
+    .ambient-bg .amb-blob-a { background: radial-gradient(circle, rgba(51,85,255,.26), transparent 68%); }
+    .ambient-bg .amb-blob-b { background: radial-gradient(circle, rgba(255,138,31,.14), transparent 70%); }
+    .ambient-bg .amb-blob-c { background: radial-gradient(circle, rgba(90,110,200,.38), transparent 72%); }
+  }
+  @keyframes ambDriftA {
+    0% { transform: translate(-18%,-12%) scale(1); }
+    25% { transform: translate(24%,-40%) scale(1.1); }
+    50% { transform: translate(60%,10%) scale(1.22); }
+    75% { transform: translate(20%,55%) scale(1.05); }
+    100% { transform: translate(-18%,-12%) scale(1); }
+  }
+  @keyframes ambDriftB {
+    0% { transform: translate(15%,8%) scale(1.12); }
+    30% { transform: translate(-40%,-14%) scale(1); }
+    55% { transform: translate(-62%,-45%) scale(.88); }
+    80% { transform: translate(-14%,-60%) scale(1.05); }
+    100% { transform: translate(15%,8%) scale(1.12); }
+  }
+  @keyframes ambDriftC {
+    0% { transform: translate(-12%,14%) scale(1.05); }
+    26% { transform: translate(-50%,42%) scale(.9); }
+    53% { transform: translate(-70%,70%) scale(.8); }
+    78% { transform: translate(-24%,78%) scale(1); }
+    100% { transform: translate(-12%,14%) scale(1.05); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ambient-bg .amb-blob { animation: none; }
+  }
 </style>
 </head>
-<body class="min-h-screen p-6">
+<body class="min-h-screen p-4">
+
+  <div class="ambient-bg" aria-hidden="true">
+    <span class="amb-blob amb-blob-a"></span>
+    <span class="amb-blob amb-blob-b"></span>
+    <span class="amb-blob amb-blob-c"></span>
+  </div>
 
   <!-- ============================================================
        KONFIGURATION - hier deine Werte aus apps-script/README.md eintragen
        ============================================================ -->
   <script>
     const BRIDGE_URL = "https://script.google.com/macros/s/AKfycby6z5GC1Uzgbr-Qr5UzlrE329HADwX-rR5qrvi8F8t8vNwmoXpINThjA0YzzkxHL0xz/exec";
-    const BRIDGE_TOKEN = "366e636fffda2e793053addd242edc3f";
+    const BRIDGE_TOKEN = "1088d19ba9d9fb5910f0e9b2ee07fea7";
     const POLL_INTERVAL_MS = 15 * 60 * 1000; // 15 Minuten (siehe collect.yml)
   </script>
 
-  <div class="max-w-5xl mx-auto space-y-6">
+  <div class="max-w-6xl mx-auto space-y-4">
 
-    <header class="text-center space-y-1">
-      <img src="data:image/png;base64,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" alt="Logo" class="w-16 h-16 mx-auto mb-2" />
-      <h1 class="font-display font-black text-2xl">ElevenLabs Einnahmen</h1>
-      <p class="text-sm muted font-medium mb-2">5 Sprachklone</p>
-      <p id="readoutLabel" class="text-sm muted font-num">Ablesezeit diese Woche: —</p>
-      <p id="staleWarning" class="hidden text-amber-deep text-sm mt-2 font-medium">⚠️ Daten veraltet</p>
+    <!-- Kompakte Einzeilen-Kopfzeile (Nutzer-Feedback 20.08.2026: "Bildschirm-
+         füllender", auf 1920x1080 soll alles bis inkl. "Alle Auszahlungen"
+         (zugeklappt) ohne Scrollen passen) - Kurve+Info links, Logo/Titel
+         mittig, Ablesezeit/Letzter Datenpunkt rechts, statt wie zuvor komplett
+         untereinander gestapelt. -->
+    <header class="grid items-center gap-4 py-1" style="grid-template-columns: 1fr auto 1fr;">
+      <div class="relative flex items-center gap-2 justify-self-start">
+        <svg id="trendSparkline" width="70" height="22" viewBox="0 0 90 26"></svg>
+        <span id="trendArrow" class="text-sm font-num font-semibold"></span>
+        <button id="insightsInfoBtn" class="text-sm muted" style="line-height:1;" title="Details zum Trend">ⓘ</button>
+        <div id="insightsPopover" class="hidden card p-4 text-left text-sm" style="position:absolute; top:26px; left:0; width:320px; max-width:85vw; z-index:20;">
+          <p class="font-display font-bold mb-2 text-xs muted">Wahrscheinliche Muster (statistisch, keine Garantie)</p>
+          <ul id="insightsList" class="space-y-1.5"></ul>
+          <div class="mt-3 pt-2" style="border-top:1px solid var(--card-border);">
+            <p class="text-xs muted mb-1">Notiz zur aktuellen Woche:</p>
+            <p id="insightsNoteText" class="text-xs mb-1">—</p>
+            <button id="insightsNoteEditBtn" class="text-xs" style="color:#3355FF;">Notiz bearbeiten</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex flex-col items-center text-center">
+      <img src="data:image/png;base64,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" alt="Logo" class="w-[50px] h-[50px]" />
+      <h1 class="font-display font-black text-lg leading-tight">ElevenLabs Einnahmen</h1>
+      <p class="text-xs muted font-medium">5 Sprachklone</p>
+      </div>
+
+      <div class="flex flex-col items-end text-right gap-0.5 justify-self-end">
+        <p id="readoutLabel" class="text-xs muted font-num">abgelesen diese KW: —</p>
+        <p id="startValueHeader" class="text-xs muted font-num">Startwert: —</p>
+        <div class="flex items-center gap-2">
+          <p id="lastDataPointLabel" class="text-xs font-num font-medium muted">Letzter Datenpunkt: —</p>
+          <button id="refreshBtn" class="text-sm muted" style="line-height:1;" title="Jetzt neu von der Bridge abfragen">↻</button>
+        </div>
+        <p class="text-xs muted font-num">Kurs: <span id="fxRate">—</span></p>
+      </div>
     </header>
 
-    <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div class="card p-5 text-center">
-        <p id="sinceLabel" class="text-xs muted mb-1 font-medium">Seit gestern</p>
-        <p id="sinceYesterday" class="text-4xl font-display font-black font-num">$0.00</p>
-      </div>
-      <div class="card p-5 text-center">
-        <p class="text-xs muted mb-1 font-medium">Diese Woche</p>
-        <p id="thisWeekUsd" class="text-4xl font-display font-black font-num">$0.00</p>
-        <p id="thisWeekUsdPrev" class="text-xs muted font-num mt-1">&nbsp;</p>
-      </div>
-      <div class="card p-5 text-center">
-        <p class="text-xs muted mb-1 font-medium">Ø pro Tag (diese Woche)</p>
-        <p id="avgDaily" class="text-4xl font-display font-black font-num">$0.00</p>
-        <p id="avgDailyPrev" class="text-xs muted font-num mt-1">&nbsp;</p>
-      </div>
-    </section>
-
-    <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div class="card p-4">
-        <p class="text-xs muted font-medium">EUR / letzte Abrechnung</p>
-        <div class="flex items-baseline gap-2 mt-1">
-          <p id="thisWeekEur" class="text-2xl font-semibold font-num">—</p>
-          <span id="thisWeekPct" class="text-xs font-num font-semibold"></span>
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div id="cardSinceYesterday" class="card p-3">
+        <p id="sinceLabel" class="text-xs muted mb-0.5 font-medium text-center">Seit gestern</p>
+        <p id="sinceYesterday" class="text-3xl font-display font-black font-num text-center">0,00 $</p>
+        <!-- Abstand vor "Rekord Tag" (Nutzer-Anforderung 21.08.2026). -->
+        <div class="mt-2"></div>
+        <div class="info-row text-xs font-num mt-0.5">
+          <span class="info-label muted">Rekord Tag</span>
+          <span id="bestDayRecord" class="info-value muted">&nbsp;</span>
         </div>
-        <p id="thisWeekEurPrev" class="text-xs muted font-num mt-1">&nbsp;</p>
+        <div class="info-row text-xs font-num mt-0.5">
+          <span id="sinceYesterdayVsLastYearLabel" class="info-label muted">&nbsp;</span>
+          <span id="sinceYesterdayVsLastYear" class="info-value muted">&nbsp;</span>
+        </div>
+        <!-- Platzhalterzeilen, damit Feld1 optisch dieselbe Hoehe wie Feld2 hat und
+             die Zeilen ueber alle drei Karten hinweg auf gleicher Hoehe liegen
+             (Nutzer-Anforderung 21.08.2026: "Feld1 bis Feld2 in der Horizontalen
+             optisch miteinander ausrichten"). -->
+        <p class="text-xs muted font-num mt-0.5" aria-hidden="true">&nbsp;</p>
+        <p class="text-xs muted font-num mt-0.5" aria-hidden="true">&nbsp;</p>
+        <p class="text-xs muted font-num mt-0.5" aria-hidden="true">&nbsp;</p>
       </div>
-      <div class="card p-4">
-        <p class="text-xs muted font-medium">Dieser Monat (EUR)</p>
-        <p id="thisMonthEur" class="text-2xl font-semibold font-num mt-1">—</p>
-        <p id="thisMonthEurPrev" class="text-xs muted font-num mt-1">&nbsp;</p>
+      <div class="card p-3">
+        <p class="text-xs muted mb-0.5 font-medium text-center">Diese Woche</p>
+        <p id="thisWeekUsd" class="text-3xl font-display font-black font-num text-center">0,00 $</p>
+        <div class="mt-2"></div>
+        <div class="info-row text-xs font-num mt-0.5">
+          <span class="info-label muted">Vorwoche</span>
+          <span id="thisWeekUsdPrev" class="info-value muted">&nbsp;</span>
+        </div>
+        <div class="info-row text-xs font-num mt-0.5">
+          <span class="info-label muted">bis jetzt ca.</span>
+          <span id="thisWeekEurEstimate" class="info-value muted">&nbsp;</span>
+        </div>
+        <div class="info-row text-xs font-num mt-0.5">
+          <span class="info-label muted">aktuell gesamt</span>
+          <span id="currentTotalValue" class="info-value muted">&nbsp;</span>
+        </div>
+        <div class="info-row text-xs font-num mt-0.5">
+          <span class="info-label muted">Rekord Woche</span>
+          <span id="bestWeekRecord" class="info-value muted">&nbsp;</span>
+        </div>
+        <div class="info-row text-xs font-num mt-0.5">
+          <span id="weekProjectionLabel" class="info-label muted">&nbsp;</span>
+          <span id="weekProjection" class="info-value muted">&nbsp;</span>
+        </div>
       </div>
-      <div class="card p-4">
-        <p class="text-xs muted font-medium">Dieses Jahr (EUR)</p>
-        <p id="thisYearEur" class="text-2xl font-semibold font-num mt-1">—</p>
-        <p id="thisYearEurPrev" class="text-xs muted font-num mt-1">&nbsp;</p>
+      <div class="card p-3">
+        <p class="text-xs muted mb-0.5 font-medium text-center">Ø pro Tag (diese Woche)</p>
+        <p id="avgDaily" class="text-3xl font-display font-black font-num text-center">0,00 $</p>
+        <div class="mt-2"></div>
+        <div class="info-row text-xs font-num mt-0.5">
+          <span class="info-label muted">Vorwoche</span>
+          <span id="avgDailyPrev" class="info-value muted">&nbsp;</span>
+        </div>
+        <div class="info-row text-xs font-num mt-0.5">
+          <span class="info-label muted">berechnet aus</span>
+          <span id="avgDailyBasis" class="info-value muted">&nbsp;</span>
+        </div>
+        <!-- Ganz unten, analog zu Feld2 "Diese Woche" (dort steht die Prognose auch
+             als letzte Zeile) - Nutzer-Feedback 20.08.2026: "muss ganz runter ...
+             so dass es optisch wie Feld2 aufgeteilt ist". -->
+        <div class="info-row text-xs font-num mt-0.5">
+          <span class="info-label muted">Prognose Ø/Tag (Woche)</span>
+          <span id="avgDailyProjection" class="info-value muted">&nbsp;</span>
+        </div>
+        <!-- Platzhalterzeilen fuer Zeilenausrichtung mit Feld2 (Nutzer-Anforderung
+             21.08.2026, siehe Feld1 oben fuer denselben Grund). -->
+        <p class="text-xs muted font-num mt-0.5" aria-hidden="true">&nbsp;</p>
+        <p class="text-xs muted font-num mt-0.5" aria-hidden="true">&nbsp;</p>
       </div>
     </section>
 
-    <section class="card p-4">
-      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div id="cardEurLast" class="card p-3">
+        <div class="flex justify-between items-baseline">
+          <p class="text-xs muted font-medium">EUR / letzte Abrechnung</p>
+          <p class="text-xs muted font-medium">Vorwoche</p>
+        </div>
+        <div class="flex justify-between items-baseline mt-0.5">
+          <div class="flex items-baseline gap-2">
+            <p id="thisWeekEur" class="text-xl font-semibold font-num">—</p>
+            <span id="thisWeekPct" class="text-xs font-num font-semibold"></span>
+          </div>
+          <p id="thisWeekEurPrev" class="text-xl font-semibold font-num muted">&nbsp;</p>
+        </div>
+      </div>
+      <div id="cardMonth" class="card p-3">
+        <div class="flex justify-between items-baseline">
+          <p class="text-xs muted font-medium">Dieser Monat (EUR)</p>
+          <p class="text-xs muted font-medium">Vormonat</p>
+        </div>
+        <div class="flex justify-between items-baseline mt-0.5">
+          <p id="thisMonthEur" class="text-xl font-semibold font-num">—</p>
+          <p id="thisMonthEurPrev" class="text-xl font-semibold font-num muted">&nbsp;</p>
+        </div>
+      </div>
+      <div id="cardYear" class="card p-3">
+        <div class="flex justify-between items-baseline">
+          <p class="text-xs muted font-medium">Dieses Jahr (EUR)</p>
+          <p id="thisYearEurPrevLabel" class="text-xs muted font-medium">&nbsp;</p>
+        </div>
+        <div class="flex justify-between items-baseline mt-0.5">
+          <p id="thisYearEur" class="text-xl font-semibold font-num">—</p>
+          <p id="thisYearEurPrev" class="text-xl font-semibold font-num muted">&nbsp;</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card p-3">
+      <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
         <h2 class="font-display font-bold">Verlauf</h2>
         <div class="flex gap-2 text-sm items-center flex-wrap">
-          <button id="btnDaily" data-range="daily" class="range-btn px-3 py-1 rounded-full bg-amber text-white">Tag</button>
-          <button id="btnWeekly" data-range="weekly" class="range-btn px-3 py-1 rounded-full">Woche</button>
+          <button id="btnDaily" data-range="daily" class="range-btn px-3 py-1 rounded-full">Tag</button>
+          <button id="btnWeekly" data-range="weekly" class="range-btn px-3 py-1 rounded-full bg-amber text-white">Woche</button>
           <button id="btnMonthly" data-range="monthly" class="range-btn px-3 py-1 rounded-full">Monat</button>
           <button id="btnYearly" data-range="yearly" class="range-btn px-3 py-1 rounded-full">Jahr</button>
           <button data-range="total" class="range-btn px-3 py-1 rounded-full">Gesamt</button>
         </div>
       </div>
-      <canvas id="historyChart" height="90"></canvas>
-    </section>
-
-    <section class="card p-4">
-      <h2 class="font-display font-bold mb-3">Alle Auszahlungen</h2>
-      <div class="max-h-96 overflow-y-auto">
-        <table class="w-full text-sm">
-          <thead class="muted text-left sticky top-0" style="background:var(--card-bg)">
-            <tr><th class="py-1">Woche ab</th><th>EUR</th><th>Ø/Tag</th><th>Status</th></tr>
-          </thead>
-          <tbody id="historyTableBody"></tbody>
-        </table>
+      <div class="flex gap-4" style="height:260px;">
+        <div class="flex-1" style="min-width:0; position:relative;">
+          <canvas id="historyChart"></canvas>
+        </div>
+        <div id="dailyBarWrap" class="hidden flex flex-col" style="width:33%; min-width:0;">
+          <div class="flex items-center justify-between mb-1">
+            <button id="barChartPrevBtn" class="muted hover:text-white" style="line-height:1; font-size:22px; padding:0 4px;" title="Frühere Werte anzeigen">◂</button>
+            <p id="dailyBarTitle" class="text-xs muted" style="text-align:center; flex:1;">Tagesumsatz (diese Woche)</p>
+            <button id="barChartNextBtn" class="muted hover:text-white" style="line-height:1; font-size:22px; padding:0 4px;" title="Zurück zu aktuellen Werten">▸</button>
+          </div>
+          <div style="position:relative; flex:1; min-height:0;">
+            <canvas id="dailyBarChart"></canvas>
+          </div>
+        </div>
       </div>
     </section>
 
-    <p class="text-center text-xs muted font-num">
-      Letzte Aktualisierung: <span id="lastUpdated">—</span>
-      &nbsp;·&nbsp; Nächste Aktualisierung in <span id="countdown">—</span>
-      &nbsp;·&nbsp; Kurs: <span id="fxRate">—</span>
-    </p>
+    <section class="card p-3">
+      <div class="w-full flex items-center justify-between">
+        <button id="payoutToggle" class="flex-1 flex items-center justify-between text-left">
+          <h2 class="font-display font-bold">Alle Auszahlungen</h2>
+          <span id="payoutToggleLabel" class="muted text-sm font-medium">▸ anzeigen</span>
+        </button>
+        <div class="flex items-center gap-3 ml-3">
+          <!-- Tabs statt eigener Seite (Nutzer-Entscheidung 20.08.2026: "dann bleiben
+               wir auf der Seite und wechseln nicht") - News zeigen sich anstelle der
+               Auszahlungen im selben Feld, kein Seitenwechsel noetig. -->
+          <button id="tabPayoutsBtn" class="text-sm font-medium" style="color:#FF8A1F;">Auszahlungen</button>
+          <button id="tabNewsBtn" class="muted text-sm font-medium hover:text-white">📰 News</button>
+          <!-- Steuerlicher/unabhängiger Nachweis (Nutzer-Feedback 20.08.2026): erzeugt
+               eine herunterladbare, datierte CSV-Momentaufnahme aller Auszahlungen -
+               unabhängig von Google/ElevenLabs archivierbar. Rein clientseitig (Blob +
+               <a download>), kein Server beteiligt. Eigener Button statt verschachtelt
+               im Toggle-Button, sonst würde ein Klick beides gleichzeitig auslösen. -->
+          <button id="csvExportBtn" class="muted text-sm font-medium hover:text-white" title="Alle Auszahlungen als CSV-Datei herunterladen (für Steuerunterlagen/Backup)">⬇ CSV</button>
+        </div>
+      </div>
+      <div id="payoutContent" class="hidden mt-3">
+       <div id="payoutsView">
+        <!-- Beide Tabellen scrollen unabhängig voneinander (max-h + overflow-y-auto) -
+             das war bisher optisch nicht erkennbar, beide sahen wie eine durchgehende
+             Fläche aus (Nutzer-Feedback 20.08.2026: "faktisch nicht zu erkennen").
+             Jetzt jede in einer eigenen, sichtbar abgesetzten (eingesenkten) Box mit
+             Rahmen, damit klar ist: das sind zwei getrennte Scroll-Bereiche. -->
+        <p class="text-xs muted mb-1 font-medium">Monatsübersicht <span class="opacity-60">(scrollbar)</span></p>
+        <div class="max-h-48 overflow-y-auto mb-4 rounded-lg" style="border:1px solid var(--card-border); background:rgba(0,0,0,0.15); box-shadow: inset 0 0 8px rgba(0,0,0,0.25); padding:0 8px;">
+          <table class="w-full text-sm">
+            <thead class="muted text-left sticky top-0" style="background:var(--card-bg)">
+              <tr><th class="py-1">Monat</th><th>Auszahlungen</th><th>Summe EUR</th><th>Ø/Woche</th><th>Δ Vormonat</th></tr>
+            </thead>
+            <tbody id="monthlySummaryBody"></tbody>
+          </table>
+        </div>
+        <p class="text-xs muted mb-1 font-medium">Einzelne Wochen <span class="opacity-60">(scrollbar)</span></p>
+        <div class="max-h-96 overflow-y-auto rounded-lg" style="border:1px solid var(--card-border); background:rgba(0,0,0,0.15); box-shadow: inset 0 0 8px rgba(0,0,0,0.25); padding:0 8px;">
+          <table class="w-full text-sm">
+            <thead class="muted text-left sticky top-0" style="background:var(--card-bg)">
+              <tr><th class="py-1">Woche ab</th><th>KW</th><th>EUR</th><th>Ø/Tag</th><th>Δ Vorwoche</th><th title="Wochenveränderung damals im Vorjahr, rein 2025-intern - kein Vergleich zwischen den Jahren">Δ Vorjahr (damals)</th><th>Status</th></tr>
+            </thead>
+            <tbody id="historyTableBody"></tbody>
+          </table>
+        </div>
+       </div>
+       <div id="newsView" class="hidden">
+        <p class="text-xs muted mb-1 leading-relaxed">
+          Automatisch gesammelt (täglich, RSS) und ins Deutsche übersetzt, ergänzt um
+          manuell recherchierte, quellenbelegte historische Ereignisse. Dieselben
+          Einträge erscheinen als violette Punkte im "Gesamt"-Chart - bewusst ohne
+          automatische Kausalitätsbehauptung, nur als Kontext zum selbst Einordnen.
+        </p>
+        <div class="max-h-96 overflow-y-auto rounded-lg" style="border:1px solid var(--card-border); background:rgba(0,0,0,0.15); box-shadow: inset 0 0 8px rgba(0,0,0,0.25); padding:0 8px;">
+          <div id="newsListBody"></div>
+        </div>
+       </div>
+      </div>
+    </section>
   </div>
 
   <!-- Bildschirmschoner/Sperre: aktiviert sich nach 10 Min. Inaktivitaet, PIN-
@@ -226,8 +445,11 @@ setInterval(() => {
 }, 5000);
 
 let chart;
+let dailyBarChart;
 let latestData = null;
-let nextTickAt = Date.now() + POLL_INTERVAL_MS;
+let currentSeasonalHints = {}; // dataIndex -> Hinweistext, nur in der "Gesamt"-Ansicht befuellt
+let currentHolidayHints = {}; // dataIndex -> Ferien-Hinweistext, nur in der "Gesamt"-Ansicht befuellt
+let currentNewsHints = {}; // dataIndex -> Branchennews-Hinweistext, nur in der "Gesamt"-Ansicht befuellt
 
 async function fetchData() {
   const url = `${BRIDGE_URL}?token=${encodeURIComponent(BRIDGE_TOKEN)}`;
@@ -237,28 +459,69 @@ async function fetchData() {
   return data;
 }
 
+// Loest den Collector-Workflow serverseitig ueber die Bridge aus (Nutzer-Feedback
+// 20.08.2026) - der eigentliche GitHub-Token liegt nur in Apps Script, nie hier im
+// Client. Liefert true bei Erfolg, false wenn der Trigger fehlschlug (z.B. Token noch
+// nicht in den Skripteigenschaften gesetzt).
+async function triggerCollector() {
+  const url = `${BRIDGE_URL}?token=${encodeURIComponent(BRIDGE_TOKEN)}&action=triggerCollector`;
+  const res = await fetch(url);
+  const data = await res.json();
+  return !!data.ok;
+}
+
 const deNumberFmt = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-function fmtUsd(n) { return `$${deNumberFmt.format(Number(n ?? 0))}`; }
-function fmtEur(n) { return `€${deNumberFmt.format(Number(n ?? 0))}`; }
+function fmtUsd(n) { return `${deNumberFmt.format(Number(n ?? 0))} $`; }
+function fmtEur(n) { return `${deNumberFmt.format(Number(n ?? 0))} €`; }
+// Gerundete Ganzzahl mit deutschem Tausenderpunkt ("16.320" statt "16320") - fuer
+// die kompakten Balken-/Referenzlinien-Beschriftungen im Verlauf-Chart (Nutzer-
+// Feedback 20.08.2026: "auch hier an den Tausender-Punkt denken").
+const deIntFmt = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 });
+function fmtThousands(n) { return deIntFmt.format(Math.round(n)); }
 function fmtDateTime(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso; // Fallback: rohen Wert zeigen statt "Invalid Date"
   return d.toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
+// Kurzform "TT.MM. HH:MM" (ohne Jahr, ohne Komma) fuer die Kopfzeile (Nutzer-
+// Anforderung 21.08.2026: Header-Zeile "abgelesen diese KW" kuerzen, da dort
+// jetzt zusaetzlich der Startwert Platz braucht).
+function fmtShortDateTime(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  const datePart = d.toLocaleDateString("de-DE", { timeZone: "Europe/Berlin", day: "2-digit", month: "2-digit" });
+  const timePart = d.toLocaleTimeString("de-DE", { timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit" });
+  return `${datePart} ${timePart}`;
+}
+// Ausgeschriebene Form "TT.MM.JJJJ" fuer das Ableseschaetzdatum in Feld2 (Nutzer-
+// Anforderung 21.08.2026: "Progn. vorauss. bis (Ableseschaetzdatum)" statt "bis
+// Wochenende", 2. Runde: volles Datum inkl. Jahr statt nur "TT.MM.").
+function fmtFullDate(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("de-DE", { timeZone: "Europe/Berlin", day: "2-digit", month: "2-digit", year: "numeric" });
+}
 
 function fmtSinceLabel(data) {
-  const timePart = data.readoutTimeWeekly
-    ? new Date(data.readoutTimeWeekly).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })
-    : "";
-  if (data.sinceLabelKind === "heute") return `Seit heute, ${timePart}`;
-  if (data.sinceLabelKind === "gestern") return `Seit gestern, ${timePart}`;
-  if (data.sinceReferenceDate) {
-    const d = new Date(data.sinceReferenceDate + "T00:00:00");
-    const datePart = d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
-    return `Seit ${datePart}, ${timePart}`;
-  }
-  return `Seit gestern, ${timePart}`;
+  // Leitet "heute"/"gestern"/Datum direkt aus dem exakten Vergleichszeitpunkt ab
+  // (Bugfix 19.08.2026) - robuster als ein serverseitig vorberechnetes "kind"-Enum,
+  // das mit der tatsaechlichen Uhrzeit auseinanderlaufen konnte.
+  if (!data.sinceAnchorIso) return "Seit —";
+  const anchor = new Date(data.sinceAnchorIso);
+  const now = new Date();
+  const timePart = anchor.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  const dayKey = (d) => d.toLocaleDateString("de-DE", { timeZone: "Europe/Berlin" });
+  const anchorDay = dayKey(anchor);
+  const nowDay = dayKey(now);
+  if (anchorDay === nowDay) return `Seit heute, ${timePart}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (anchorDay === dayKey(yesterday)) return `Seit gestern, ${timePart}`;
+  const datePart = anchor.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", timeZone: "Europe/Berlin" });
+  return `Seit ${datePart}, ${timePart}`;
 }
 
 function fmtPct(n) {
@@ -267,66 +530,650 @@ function fmtPct(n) {
   return `${up ? "▲" : "▼"} ${Math.abs(n).toFixed(1)}% ggü. Vorwoche`;
 }
 
+// Konsequentes Farbschema "heiss/kalt": Orange = Anstieg, Blau = Rueckgang (passend
+// zu den Chart-Vergleichslinien Amber/Blau) - auf einen Blick erfassbar (Nutzer-
+// Feedback 19.08.2026).
+const TREND_UP_COLOR = "#FF8A1F";
+const TREND_DOWN_COLOR = "#3355FF";
+
+// ISO-Wochenschluessel ("2025-W34") inkl. korrektem ISO-Wochenjahr (kann an
+// Jahresgrenzen vom Kalenderjahr abweichen) - fuer den exakten "gleiche KW,
+// Vorjahr"-Vergleich in der Auszahlungstabelle (Nutzer-Feedback 19.08.2026).
+function isoWeekYearKey(d) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - dayNum + 3);
+  const isoYear = date.getUTCFullYear();
+  const firstThursday = new Date(Date.UTC(isoYear, 0, 4));
+  const weekNum = 1 + Math.round(((date - firstThursday) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+  return `${isoYear}-W${String(weekNum).padStart(2, "0")}`;
+}
+
+function trendColor(value) {
+  if (value === null || value === undefined) return null;
+  return value >= 0 ? TREND_UP_COLOR : TREND_DOWN_COLOR;
+}
+// Konsequentes Farbschema: farbiger linker Rand je nach Vorzeichen des jeweiligen
+// Vergleichswerts - auf einen Blick "gut/schlecht" erfassbar (Nutzer-Feedback 19.08.2026).
+function applyTrendBorder(elId, value) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.style.borderLeft = `4px solid ${trendColor(value) ?? "var(--card-border)"}`;
+}
+function applyTrendText(elId, value) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.style.color = trendColor(value) ?? "";
+}
+
+// "Bestwert"-Rekorde ueber die volle Historie (Insights, Nutzer-Feedback 19.08.2026).
+function computeRecords(data) {
+  const daily = data.history?.daily ?? [];
+  const weekly = data.history?.weekly ?? [];
+  let bestDay = null;
+  daily.forEach((d) => {
+    if (d.tagesumsatzUsd === null || d.tagesumsatzUsd === undefined) return;
+    if (!bestDay || d.tagesumsatzUsd > bestDay.tagesumsatzUsd) bestDay = d;
+  });
+  let bestWeek = null;
+  weekly.forEach((w) => {
+    if (!bestWeek || w.eur > bestWeek.eur) bestWeek = w;
+  });
+  return { bestDay, bestWeek };
+}
+
+// Durchschnitt TagesumsatzUSD je Wochentag (0=So...6=Sa) - gemeinsam genutzt vom
+// Wochentag-Muster-Hinweis und der Prognose (Nutzer-Feedback 19.08.2026).
+function computeWeekdayAverages(daily) {
+  const withVal = (daily ?? []).filter((d) => d.tagesumsatzUsd !== null && d.tagesumsatzUsd !== undefined);
+  const sums = Array(7).fill(0), counts = Array(7).fill(0);
+  withVal.forEach((d) => {
+    const wd = new Date(d.date + "T00:00:00Z").getUTCDay();
+    sums[wd] += d.tagesumsatzUsd;
+    counts[wd] += 1;
+  });
+  return { avgs: sums.map((s, i) => (counts[i] ? s / counts[i] : null)), total: withVal.length };
+}
+
+function getBerlinWeekday(date) {
+  const short = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Berlin", weekday: "short" }).format(date);
+  return { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[short];
+}
+
+// Prognose bis zum voraussichtlichen naechsten Ablesezeitpunkt: wochentag-bewusst
+// statt pauschalem Tagesschnitt (Nutzer-Feedback 19.08.2026 - z.B. wenn Wochenenden
+// bekanntlich schwaecher sind). Faellt auf den einfachen Tagesschnitt zurueck, wenn
+// fuer einen Wochentag noch keine eigene Historie vorliegt.
+//
+// Wochenende-Annahme ersetzt (Nutzer-Anforderung 21.08.2026): frueher wurde starr
+// readoutTimeWeekly + 7 Tage angenommen - das ist seit der Systemumstellung bei
+// ElevenLabs (ca. 07.03.2026) spuerbar ungenau (echte Abstaende schwanken seither
+// zwischen 7,0 und 8,2 Tagen). Nutzt jetzt data.nextReadoutEstimateIso (von
+// estimateNextReadout() in Code.gs, aus den letzten 10 Auszahlungsabstaenden
+// berechnet), faellt auf die alte +7-Tage-Annahme zurueck, falls die Schaetzung
+// (noch) nicht verfuegbar ist (z.B. zu wenig Historie).
+function computeWeekProjection(data) {
+  if (!data.readoutTimeWeekly) return null;
+  const dayMs = 24 * 60 * 60 * 1000;
+  const weekEndMs = data.nextReadoutEstimateIso
+    ? new Date(data.nextReadoutEstimateIso).getTime()
+    : new Date(data.readoutTimeWeekly).getTime() + 7 * dayMs;
+  const daysRemaining = (weekEndMs - Date.now()) / dayMs;
+  if (daysRemaining <= 0) return null;
+
+  const { avgs } = computeWeekdayAverages(data.history?.daily);
+  const fallback = data.avgDailyUsd ?? 0;
+
+  let sumEstimate = 0;
+  const fullDays = Math.floor(daysRemaining);
+  const fraction = daysRemaining - fullDays;
+  for (let i = 0; i < fullDays; i++) {
+    const wd = getBerlinWeekday(new Date(Date.now() + (i + 1) * dayMs));
+    sumEstimate += avgs[wd] ?? fallback;
+  }
+  if (fraction > 0) {
+    const wd = getBerlinWeekday(new Date(Date.now() + (fullDays + 1) * dayMs));
+    sumEstimate += (avgs[wd] ?? fallback) * fraction;
+  }
+  return data.thisWeekUsdNet + sumEstimate;
+}
+
+// Saisonale Hinweise fuer einzelne Einbrueche im "Gesamt"-Chart (Nutzer-Feedback
+// 19.08.2026: "warum diese oder jene Woche abfaellt, alles saisonal soweit
+// moeglich"). Markiert NUR Wochen, die deutlich (>=20%) unter ihrem gleitenden
+// 6-Wochen-Schnitt liegen UND bei denen die naechstgelegene Woche im Vorjahr
+// (max. 10 Tage Abstand) selbst ebenfalls deutlich (>=15%) unter IHREM eigenen
+// 6-Wochen-Schnitt lag - also ein echtes wiederkehrendes Muster, keine Vermutung.
+function computeSeasonalDips(series) {
+  const hints = {};
+  const trailingMean = (idx) => {
+    const window = series.slice(Math.max(0, idx - 6), idx);
+    if (!window.length) return null;
+    return window.reduce((a, w) => a + w.eur, 0) / window.length;
+  };
+  for (let i = 6; i < series.length; i++) {
+    const mean = trailingMean(i);
+    if (!mean) continue;
+    const dev = ((series[i].eur - mean) / mean) * 100;
+    if (dev > -20) continue;
+
+    const thisMs = new Date(series[i].weekStart).getTime();
+    const targetMs = thisMs - 364 * 24 * 60 * 60 * 1000;
+    let closestIdx = -1, closestDiff = Infinity;
+    for (let j = 0; j < i; j++) {
+      const diff = Math.abs(new Date(series[j].weekStart).getTime() - targetMs);
+      if (diff < closestDiff) { closestDiff = diff; closestIdx = j; }
+    }
+    if (closestIdx < 0 || closestDiff > 10 * 24 * 60 * 60 * 1000) continue;
+    const closestMean = trailingMean(closestIdx);
+    if (!closestMean) continue;
+    const closestDev = ((series[closestIdx].eur - closestMean) / closestMean) * 100;
+    if (closestDev > -15) continue;
+
+    const d = new Date(series[closestIdx].weekStart);
+    const dateLabel = `${String(d.getUTCDate()).padStart(2, "0")}.${String(d.getUTCMonth() + 1).padStart(2, "0")}.`;
+    hints[i] = `📉 Saisonal: ähnlicher Rückgang wie im Vorjahr um diese Zeit (${fmtEur(series[closestIdx].eur)} am ${dateLabel})`;
+  }
+  return hints;
+}
+
+// Ferienzeiten-Info-Punkte im "Gesamt"-Chart (Nutzer-Feedback 20.08.2026: "der
+// Punkt, an dem die meisten Bundeslaender diese Ferien haben"). Die 16
+// Bundeslaender haben jaehrlich wechselnde, ueber mehrere Wochen gestreute
+// Ferientermine (siehe KMK-Ferienkalender) - eine exakte, jahresspezifische Liste
+// aller 16 Bundeslaender-Termine liegt hier nicht vor (keine externe API gemaess
+// Projekt-Prinzip "kein Build-Schritt"/keine Fremdabhaengigkeit). Stattdessen eine
+// kalendarisch stabile Naeherung des TYPISCHEN Ueberschneidungspunkts:
+// - Winter (Weihnachten): 27.12. liegt fuer ALLE 16 Bundeslaender innerhalb der
+//   Weihnachtsferien - die einzige echte 16-von-16-Ueberschneidung im Jahr.
+// - Ostern: die Woche nach Ostersonntag (Gauss'sche Osterformel) - die meisten
+//   Bundeslaender legen ihre Osterferien in die 1-2 Wochen nach Ostern.
+// - Sommer: erste Augustwoche - beim KMK-Rotationsplan (Sommerferien ueber Ende
+//   Juni bis Mitte September gestreut) liegt hier die groesste Ueberschneidung.
+// - Herbst: letzte Oktoberwoche (rund um den 27.10., nach dem Tag der Deutschen
+//   Einheit) - Hauptueberschneidung der Herbstferien der meisten Bundeslaender.
+// Falls diese Naeherung fuer ein bestimmtes Jahr spuerbar daneben liegt, gerne
+// Bescheid geben - dann ersetzen wir sie durch die echten KMK-Termine.
+function computeEasterSunday(year) {
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function holidayPeaksForYear(year) {
+  const easterPeak = new Date(computeEasterSunday(year).getTime() + 7 * 24 * 60 * 60 * 1000);
+  return [
+    { icon: "🐣", label: "Osterferien", date: easterPeak },
+    { icon: "☀️", label: "Sommerferien", date: new Date(Date.UTC(year, 7, 5)) },
+    { icon: "🍂", label: "Herbstferien", date: new Date(Date.UTC(year, 9, 27)) },
+    { icon: "❄️", label: "Weihnachtsferien", date: new Date(Date.UTC(year, 11, 27)) },
+  ];
+}
+
+function computeHolidayHints(series) {
+  const hints = {};
+  if (!series.length) return hints;
+  // weekStart kommt als volles ISO-Datum ("2025-08-18T00:00:00.000Z") von der
+  // Bruecke - isoWeekKey() erwartet ein reines "YYYY-MM-DD" und haengt selbst ein
+  // "T00:00:00Z" an, daher hier auf die ersten 10 Zeichen kuerzen (Bugfix: sonst
+  // doppeltes Zeitsuffix -> RangeError: Invalid time value).
+  const weekIndexByKey = {};
+  series.forEach((w, idx) => { weekIndexByKey[isoWeekKey(w.weekStart.slice(0, 10))] = idx; });
+
+  const years = new Set(series.map((w) => new Date(w.weekStart).getUTCFullYear()));
+  // Auch Vor-/Folgejahr abdecken, falls ein Ferienpunkt knapp ueber eine
+  // Jahresgrenze faellt (z.B. Weihnachtsferien Ende Dezember).
+  const uniqueYears = [...new Set([...years].flatMap((y) => [y - 1, y, y + 1]))];
+
+  uniqueYears.forEach((year) => {
+    holidayPeaksForYear(year).forEach((peak) => {
+      const key = isoWeekKey(peak.date.toISOString().slice(0, 10));
+      const idx = weekIndexByKey[key];
+      if (idx === undefined) return;
+      const label = `${peak.icon} ${peak.label}`;
+      hints[idx] = hints[idx] ? `${hints[idx]} · ${label}` : label;
+    });
+  });
+  return hints;
+}
+
+// Branchennews-Info-Punkte im "Gesamt"-Chart (Nutzer-Anforderung 20.08.2026:
+// "Ereignisse im Markt, die das Geschaeft AUDIO, KI, ChatBot, digitale KI
+// Audioentwicklung betreffen, sinnvoll optisch hier einfliessen lassen"). Ordnet
+// jeden Branchenartikel (data.industryNews, von der Bruecke ueber RSS gesammelt,
+// siehe Code.gs fetchIndustryNews()) der Woche zu, in die sein Datum faellt -
+// mehrere Artikel in derselben Woche werden zu einem Hinweis zusammengefasst.
+// Bewusst nur Kontext-Anzeige, KEINE automatische Kausalitaets-Behauptung (siehe
+// Chat-Erklaerung 20.08.2026: bei so wenigen Wochendatenpunkten waere eine
+// automatische "das war die Ursache"-Aussage statistisch nicht seriös).
+function computeNewsHints(series, industryNews) {
+  const hints = {};
+  if (!series.length || !industryNews || !industryNews.length) return hints;
+  series.forEach((w, idx) => {
+    const weekStartMs = new Date(w.weekStart).getTime();
+    const weekEndMs = weekStartMs + 7 * 24 * 60 * 60 * 1000;
+    const matches = industryNews.filter((n) => {
+      const t = new Date(n.date).getTime();
+      return t >= weekStartMs && t < weekEndMs;
+    });
+    if (!matches.length) return;
+    hints[idx] = matches.map((m) => `📰 ${m.title} (${m.source})`).join("\n");
+  });
+  return hints;
+}
+
+// Vergleich des aktuellen 24h-Fensters ("Seit gestern") mit dem Durchschnitt der
+// letzten 8 Tagesumsaetze am GLEICHEN Wochentag - ersetzt den frueheren Vergleich
+// gegen einen einzelnen Tag vor genau 364 Tagen (Nutzer-Feedback 21.08.2026: ein
+// einzelner Tag gegen einen einzelnen Tag vor einem Jahr ist zu verrauscht - bei
+// Tageswerten, die um das 15-fache schwanken koennen (z.B. "Rekord Tag" 619 $ vs.
+// Normaltag ~35 $), sagt das kaum etwas ueber einen echten Trend aus. Ø ueber die
+// letzten 8 Vorkommen desselben Wochentags glaettet das, bleibt aber
+// wochentags-synchron (Wochenende vs. Werktag bleibt vergleichbar).
+const RECENT_SAME_WEEKDAY_COUNT = 8;
+function computeDayVsRecentSameWeekday(data) {
+  const daily = data.history?.daily ?? [];
+  if (!daily.length) return null;
+  const todayBerlin = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Berlin" });
+  const todayWeekday = new Date(todayBerlin + "T00:00:00Z").getUTCDay();
+  const sameWeekdayEntries = daily
+    .filter((d) => d.date < todayBerlin && d.tagesumsatzUsd !== null && d.tagesumsatzUsd !== undefined)
+    .filter((d) => new Date(d.date + "T00:00:00Z").getUTCDay() === todayWeekday)
+    .slice(-RECENT_SAME_WEEKDAY_COUNT);
+  if (sameWeekdayEntries.length < 3) return null; // zu wenig Datenpunkte fuer eine belastbare Aussage
+  const avg = sameWeekdayEntries.reduce((sum, d) => sum + d.tagesumsatzUsd, 0) / sameWeekdayEntries.length;
+  if (avg === 0) return null;
+  const pct = ((data.sinceYesterdayUsd - avg) / avg) * 100;
+  const weekdayLabel = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"][todayWeekday];
+  return { pct, count: sameWeekdayEntries.length, weekdayLabel };
+}
+
+// Kleine SVG-Sparkline (letzte 8 Wochen, EUR) + Trend-Pfeil im Header.
+// Vergleich ueber Durchschnitt der ersten Haelfte vs. Durchschnitt der zweiten
+// Haelfte des Fensters - robuster gegen Zufallsschwankungen einzelner Wochen.
+function renderSparkline(weekly) {
+  const svg = document.getElementById("trendSparkline");
+  const arrowEl = document.getElementById("trendArrow");
+  const points = weekly.slice(-8);
+  if (points.length < 2) {
+    svg.innerHTML = "";
+    arrowEl.textContent = "";
+    return;
+  }
+  const values = points.map((p) => p.eur);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const w = 90, h = 26, pad = 2;
+  const range = max - min || 1;
+  const coords = values.map((v, i) => {
+    const x = pad + (i / (values.length - 1)) * (w - 2 * pad);
+    const y = h - pad - ((v - min) / range) * (h - 2 * pad);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const mid = Math.floor(values.length / 2);
+  const firstHalf = values.slice(0, mid);
+  const secondHalf = values.slice(mid);
+  const avg = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
+  const firstAvg = avg(firstHalf);
+  const secondAvg = avg(secondHalf);
+  const up = secondAvg >= firstAvg;
+  const color = up ? "#3FBF6F" : "#B35A0A";
+  svg.innerHTML = `<polyline points="${coords.join(" ")}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`;
+  const pct = firstAvg !== 0 ? ((secondAvg - firstAvg) / Math.abs(firstAvg)) * 100 : 0;
+  arrowEl.textContent = `${up ? "▲" : "▼"} ${Math.abs(pct).toFixed(0)}% (8 Wo.)`;
+  arrowEl.style.color = color;
+}
+
+// --- Muster-Erkennung (rein statistisch aus der eigenen Historie, siehe
+// Nutzer-Diskussion 19.08.2026: externe Ursachen wie ElevenLabs-Richtlinien-
+// Aenderungen lassen sich NICHT aus den eigenen Zahlen ableiten, nur echte
+// wiederkehrende Muster in den eigenen Daten). Jede Funktion liefert null, wenn
+// kein auffaelliges Muster erkennbar ist oder zu wenig Historie vorliegt.
+
+function detectSeasonalPattern(data) {
+  const monthly = data.history?.monthly ?? [];
+  if (monthly.length < 13) return null; // braucht mind. ~1 Jahr Historie
+  const now = new Date();
+  const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const lastYearKey = `${now.getFullYear() - 1}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const lastYearEntry = monthly.find((m) => m.month === lastYearKey);
+  if (!lastYearEntry) return null;
+  const avgAll = monthly.reduce((s, m) => s + m.eur, 0) / monthly.length;
+  if (avgAll === 0) return null;
+  const dev = ((lastYearEntry.eur - avgAll) / avgAll) * 100;
+  if (Math.abs(dev) < 12) return null; // nur deutliche Abweichungen zeigen
+  const monthNames = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+  const monthName = monthNames[now.getMonth()];
+  return dev < 0
+    ? `📉 Saisonal: ${monthName} lag im Vorjahr ${Math.abs(dev).toFixed(0)}% unter dem Durchschnitt — passt zu einem wiederkehrenden Muster (z.B. weniger Nutzung in dieser Jahreszeit).`
+    : `📈 Saisonal: ${monthName} lag im Vorjahr ${dev.toFixed(0)}% über dem Durchschnitt — dieser Monat ist historisch eher stark.`;
+}
+
+function detectWeekdayPattern(data) {
+  const { avgs, total } = computeWeekdayAverages(data.history?.daily);
+  if (total < 21) return null; // braucht mind. 3 Wochen echte Tageswerte
+  const validAvgs = avgs.filter((a) => a !== null);
+  const overallAvg = validAvgs.reduce((a, b) => a + b, 0) / validAvgs.length;
+  const todayWd = new Date().getDay();
+  if (avgs[todayWd] === null || overallAvg === 0) return null;
+  const dev = ((avgs[todayWd] - overallAvg) / overallAvg) * 100;
+  if (Math.abs(dev) < 12) return null;
+  const dayNames = ["Sonntage", "Montage", "Dienstage", "Mittwoche", "Donnerstage", "Freitage", "Samstage"];
+  return dev < 0
+    ? `📅 Wochentag-Muster: ${dayNames[todayWd]} liegen im Schnitt ${Math.abs(dev).toFixed(0)}% unter dem Wochendurchschnitt.`
+    : `📅 Wochentag-Muster: ${dayNames[todayWd]} liegen im Schnitt ${dev.toFixed(0)}% über dem Wochendurchschnitt.`;
+}
+
+function detectTrendDeviation(data) {
+  const weekly = data.history?.weekly ?? [];
+  if (weekly.length < 6) return null;
+  const current = weekly[weekly.length - 1];
+  const baseline = weekly.slice(-9, -1); // bis zu 8 Wochen davor
+  if (baseline.length < 4) return null;
+  const vals = baseline.map((w) => w.eur);
+  const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+  const variance = vals.reduce((a, b) => a + (b - mean) ** 2, 0) / vals.length;
+  const std = Math.sqrt(variance);
+  if (std === 0) return null;
+  const z = (current.eur - mean) / std;
+  if (Math.abs(z) < 1.3) return null;
+  return z > 0
+    ? `✨ Chance: Diese Woche liegt deutlich über dem üblichen Schwankungsbereich der letzten Wochen (${fmtEur(current.eur)} vs. Ø ${fmtEur(mean)}) — lohnt sich evtl. anzuschauen, was hier gut lief.`
+    : `⚠️ Auffällig: Diese Woche liegt deutlich unter dem üblichen Schwankungsbereich der letzten Wochen (${fmtEur(current.eur)} vs. Ø ${fmtEur(mean)}) — nicht durch das saisonale Muster oben erklärt, könnte einen anderen Grund haben.`;
+}
+
+// --- Manuelle Notizen (lokal im Browser gespeichert, keyed nach Wochenstart-ISO) -
+// fuer echten, recherchierten Kontext (z.B. "ElevenLabs-Auszahlungspolitik
+// ueberarbeitet, siehe VLA 06.03.2026"), den die Statistik allein nicht liefern kann.
+const NOTES_STORAGE_KEY = "elevenlabsDashboardNotes_v1";
+function getAllNotes() {
+  try {
+    return JSON.parse(localStorage.getItem(NOTES_STORAGE_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+function getNote(weekStartIso) {
+  return getAllNotes()[weekStartIso] || "";
+}
+function setNote(weekStartIso, text) {
+  const notes = getAllNotes();
+  if (text && text.trim()) notes[weekStartIso] = text.trim();
+  else delete notes[weekStartIso];
+  localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes));
+}
+
+function renderInsightsPopover(data) {
+  const list = document.getElementById("insightsList");
+  const patterns = [detectTrendDeviation(data), detectSeasonalPattern(data), detectWeekdayPattern(data)].filter(Boolean);
+  list.innerHTML = patterns.length
+    ? patterns.map((p) => `<li>${p}</li>`).join("")
+    : `<li class="muted">Noch keine auffälligen Muster erkannt.</li>`;
+
+  const weekly = data.history?.weekly ?? [];
+  const latestWeekIso = weekly.length ? weekly[weekly.length - 1].weekStart : null;
+  const noteText = latestWeekIso ? getNote(latestWeekIso) : "";
+  document.getElementById("insightsNoteText").textContent = noteText || "— (noch keine Notiz)";
+
+  const editBtn = document.getElementById("insightsNoteEditBtn");
+  editBtn.onclick = () => {
+    if (!latestWeekIso) return;
+    const current = getNote(latestWeekIso);
+    const next = prompt("Notiz zur aktuellen Woche (z.B. bekannter externer Grund):", current);
+    if (next !== null) {
+      setNote(latestWeekIso, next);
+      renderInsightsPopover(data);
+    }
+  };
+}
+
+document.getElementById("insightsInfoBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  document.getElementById("insightsPopover").classList.toggle("hidden");
+});
+document.addEventListener("click", (e) => {
+  const pop = document.getElementById("insightsPopover");
+  if (!pop.classList.contains("hidden") && !pop.contains(e.target) && e.target.id !== "insightsInfoBtn") {
+    pop.classList.add("hidden");
+  }
+});
+
 function render(data) {
   latestData = data;
-  document.getElementById("readoutLabel").textContent = `Ablesezeit diese Woche: ${fmtDateTime(data.readoutTimeWeekly)}`;
+  document.getElementById("readoutLabel").textContent = `abgelesen diese KW: ${fmtShortDateTime(data.readoutTimeWeekly)}`;
+  // Startwert (von ElevenLabs beim letzten Rollover nicht ausgezahltes Restguthaben)
+  // in den Header verschoben statt in Feld2 (Nutzer-Anforderung 21.08.2026: "Feld2
+  // ist zu hoch und zu voll"). Aufgerundet auf ganze Dollar (Nutzer-Anforderung:
+  // "aufrunden").
+  document.getElementById("startValueHeader").textContent =
+    `Startwert: ${Math.ceil(data.weekStartBalanceUsd ?? 0)} $`;
   document.getElementById("sinceLabel").textContent = fmtSinceLabel(data);
   document.getElementById("sinceYesterday").textContent = fmtUsd(data.sinceYesterdayUsd);
+  const dayVsRecent = computeDayVsRecentSameWeekday(data);
+  document.getElementById("sinceYesterdayVsLastYearLabel").textContent = dayVsRecent
+    ? `ggü. Ø letzte ${dayVsRecent.count} ${dayVsRecent.weekdayLabel}`
+    : " ";
+  document.getElementById("sinceYesterdayVsLastYear").textContent = dayVsRecent
+    ? `${dayVsRecent.pct >= 0 ? "▲" : "▼"} ${Math.abs(dayVsRecent.pct).toFixed(0)}%`
+    : " ";
+  applyTrendText("sinceYesterdayVsLastYear", dayVsRecent ? dayVsRecent.pct : null);
   document.getElementById("thisWeekUsd").textContent = fmtUsd(data.thisWeekUsdNet);
   document.getElementById("avgDaily").textContent =
     data.avgDailyUsd === null || data.avgDailyUsd === undefined ? "—" : fmtUsd(data.avgDailyUsd);
   document.getElementById("thisWeekUsdPrev").textContent =
     data.lastWeekUsdSameOffset !== null && data.lastWeekUsdSameOffset !== undefined
-      ? `Vorwoche: ${fmtUsd(data.lastWeekUsdSameOffset)}`
-      : " ";
+      ? fmtUsd(data.lastWeekUsdSameOffset)
+      : "—";
+  applyTrendText("thisWeekUsdPrev", data.lastWeekUsdSameOffset !== null && data.lastWeekUsdSameOffset !== undefined
+    ? data.thisWeekUsdNet - data.lastWeekUsdSameOffset : null);
   document.getElementById("avgDailyPrev").textContent =
     data.lastWeekAvgDailyUsd !== null && data.lastWeekAvgDailyUsd !== undefined
-      ? `Vorwoche: ${fmtUsd(data.lastWeekAvgDailyUsd)}`
-      : " ";
+      ? fmtUsd(data.lastWeekAvgDailyUsd)
+      : "—";
+  applyTrendText("avgDailyPrev", data.avgDailyUsd !== null && data.avgDailyUsd !== undefined
+    && data.lastWeekAvgDailyUsd !== null && data.lastWeekAvgDailyUsd !== undefined
+    ? data.avgDailyUsd - data.lastWeekAvgDailyUsd : null);
+  // Rechenbasis fuer "Ø pro Tag": ueber wie viele volle Tage + Stunden seit der
+  // Ablesezeit sich der Durchschnitt tatsaechlich bildet (Nutzer-Feedback 20.08.2026).
+  const avgDailyBasisEl = document.getElementById("avgDailyBasis");
+  if (data.avgDailyUsd !== null && data.avgDailyUsd !== undefined && data.readoutTimeWeekly) {
+    const elapsedMs = Date.now() - new Date(data.readoutTimeWeekly).getTime();
+    const elapsedDays = Math.floor(elapsedMs / (24 * 60 * 60 * 1000));
+    const elapsedHours = Math.floor((elapsedMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+    avgDailyBasisEl.textContent = `berechnet aus ${elapsedDays}T ${elapsedHours}Std`;
+  } else {
+    avgDailyBasisEl.textContent = "—";
+  }
 
   document.getElementById("thisWeekEur").textContent = fmtEur(data.thisWeekEur);
   document.getElementById("thisWeekEurPrev").textContent =
     data.lastWeekEurDirect !== null && data.lastWeekEurDirect !== undefined
-      ? `Vorwoche: ${fmtEur(data.lastWeekEurDirect)}`
-      : " ";
+      ? fmtEur(data.lastWeekEurDirect)
+      : "—";
+  applyTrendText("thisWeekEurPrev", data.lastWeekEurDirect !== null && data.lastWeekEurDirect !== undefined
+    ? data.thisWeekEur - data.lastWeekEurDirect : null);
   document.getElementById("thisMonthEur").textContent = fmtEur(data.thisMonthEur);
   document.getElementById("thisMonthEurPrev").textContent =
     data.lastMonthEur !== null && data.lastMonthEur !== undefined
-      ? `Vormonat: ${fmtEur(data.lastMonthEur)}`
-      : " ";
+      ? fmtEur(data.lastMonthEur)
+      : "—";
+  applyTrendText("thisMonthEurPrev", data.lastMonthEur !== null && data.lastMonthEur !== undefined
+    ? data.thisMonthEur - data.lastMonthEur : null);
   document.getElementById("thisYearEur").textContent = fmtEur(data.thisYearEur);
+  document.getElementById("thisYearEurPrevLabel").textContent =
+    `Vergleich ${new Date().getFullYear() - 1} bis heute`;
   document.getElementById("thisYearEurPrev").textContent =
     data.lastYearEurSamePeriod !== null && data.lastYearEurSamePeriod !== undefined
-      ? `Vorjahr (bis hierhin): ${fmtEur(data.lastYearEurSamePeriod)}`
-      : " ";
+      ? fmtEur(data.lastYearEurSamePeriod)
+      : "—";
+  applyTrendText("thisYearEurPrev", data.lastYearEurSamePeriod !== null && data.lastYearEurSamePeriod !== undefined
+    ? data.thisYearEur - data.lastYearEurSamePeriod : null);
 
   const pctEl = document.getElementById("thisWeekPct");
   pctEl.textContent = fmtPct(data.thisWeekVsLastWeekPct);
-  pctEl.style.color = (data.thisWeekVsLastWeekPct ?? 0) >= 0 ? "#3FBF6F" : "#B35A0A";
+  pctEl.style.color = trendColor(data.thisWeekVsLastWeekPct) ?? "";
 
   document.getElementById("fxRate").textContent = data.fxRateUsdEur
     ? `1 USD ≈ ${Number(data.fxRateUsdEur).toFixed(4)} EUR`
     : "—";
 
   const weekly = data.history?.weekly ?? [];
-  document.getElementById("staleWarning").classList.toggle("hidden", !data.stale);
-  document.getElementById("lastUpdated").textContent = data.lastUpdated
-    ? new Date(data.lastUpdated).toLocaleString("de-DE")
+  // Statt einer vagen "Daten veraltet"-Warnung immer die konkrete Uhrzeit des letzten
+  // Datenpunkts zeigen (Nutzer-Feedback 20.08.2026) - bei Veraltung zusaetzlich farblich
+  // hervorgehoben, damit sofort ersichtlich ist, wie alt der Wert tatsaechlich ist.
+  const lastDataPointEl = document.getElementById("lastDataPointLabel");
+  if (data.lastUpdated) {
+    const timePart = new Date(data.lastUpdated).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    lastDataPointEl.textContent = `${data.stale ? "⚠️ " : ""}Letzter Datenpunkt: ${timePart}`;
+  } else {
+    lastDataPointEl.textContent = "Letzter Datenpunkt: —";
+  }
+  lastDataPointEl.classList.toggle("text-amber-deep", data.stale);
+  lastDataPointEl.classList.toggle("muted", !data.stale);
+
+  // EUR-Schaetzung des laufenden Wochen-USD-Werts zum aktuellen Kurs (Nutzer-
+  // Feedback 19.08.2026) - der tatsaechliche EUR-Betrag steht erst nach der
+  // woechentlichen Abrechnung fest, das hier ist nur eine Naeherung zum Live-Kurs.
+  const thisWeekEurEstimateEl = document.getElementById("thisWeekEurEstimate");
+  thisWeekEurEstimateEl.textContent =
+    data.fxRateUsdEur ? fmtEur(data.thisWeekUsdNet * data.fxRateUsdEur) : "—";
+  thisWeekEurEstimateEl.style.color = data.fxRateUsdEur ? TREND_UP_COLOR : "";
+
+  // Aktueller Gesamtwert (Startwert + reale Steigerung seit dem letzten Ablese-
+  // zeitpunkt 11:59, KEINE Projektion) - Nutzer-Anforderung 20.08.2026 ("wo schreiben
+  // wir den aktuellen Gesamt-Dollar-Wert hin?"), am 21.08.2026 erneut angemerkt, da
+  // damals nur die PROGNOSE (Ist + geschaetzter Rest, siehe weekProjection unten)
+  // umgesetzt wurde, nicht der tatsaechliche laufende Wert. data.currentPeriodUsd ist
+  // exakt weekStartBalanceUsd + reale Zuwaechse seither, wird bereits von der Bruecke
+  // geliefert, war bisher aber nirgends sichtbar.
+  const currentTotalEl = document.getElementById("currentTotalValue");
+  const currentTotalEur = data.fxRateUsdEur ? data.currentPeriodUsd * data.fxRateUsdEur : null;
+  currentTotalEl.textContent = `${fmtUsd(data.currentPeriodUsd)}${currentTotalEur !== null ? ` (~${fmtEur(currentTotalEur)})` : ""}`;
+
+  // Rekorde + Prognose (Insights, Nutzer-Feedback 19.08.2026)
+  const { bestDay, bestWeek } = computeRecords(data);
+  document.getElementById("bestDayRecord").textContent = bestDay
+    ? `${fmtUsd(bestDay.tagesumsatzUsd)} (${fmtDateTime(bestDay.date).slice(0, 5)})`
     : "—";
+  document.getElementById("bestWeekRecord").textContent = bestWeek
+    ? `${fmtEur(bestWeek.eur)} (${fmtDateTime(bestWeek.weekStart).slice(0, 5)})`
+    : "—";
+  // computeWeekProjection() liefert den gesamten hochgerechneten Wochenwert (Ist +
+  // Restbetrag), nicht nur den Restbetrag - das ist bereits der "aktuelle Gesamt-
+  // Dollar-Wert", nach dem gefragt wurde (Nutzer-Feedback 20.08.2026: "wo schreiben
+  // wir den hin?") - jetzt zusaetzlich zur EUR-Naeherung auch in $ sichtbar, direkt
+  // in derselben Zeile.
+  const projection = computeWeekProjection(data);
+  const weekProjectionEl = document.getElementById("weekProjection");
+  const projectionEur = projection !== null && data.fxRateUsdEur ? projection * data.fxRateUsdEur : null;
+  const projectionEndLabel = data.nextReadoutEstimateIso ? fmtFullDate(data.nextReadoutEstimateIso) : "Wochenende";
+  // Label (Datum, links) und Wert (Betrag, rechts) jetzt in einer Zeile als eigene
+  // Spans statt uebereinander mit <br> (Nutzer-Anforderung 21.08.2026, 3. Runde:
+  // einheitliches Label-links/Wert-rechts-Schema fuer alle Kartenzeilen).
+  document.getElementById("weekProjectionLabel").textContent = projection !== null
+    ? `Progn. bis ${projectionEndLabel}`
+    : " ";
+  weekProjectionEl.textContent = projection !== null
+    ? `~${fmtUsd(projection)}${projectionEur !== null ? ` (~${fmtEur(projectionEur)})` : ""}`
+    : "—";
+  weekProjectionEl.style.color = projection !== null ? "#3355FF" : "";
+  // Transparenz-Tooltip: geschaetztes Datum ist keine Garantie, sondern der
+  // Mittelwert der letzten N Auszahlungsabstaende - Unsicherheit offen zeigen
+  // statt falsche Praezision vorzugaukeln (Nutzer-Anforderung 21.08.2026).
+  weekProjectionEl.title = data.nextReadoutEstimateIso
+    ? `Geschätzter nächster Ablesezeitpunkt: ${fmtDateTime(data.nextReadoutEstimateIso)} ± ${data.nextReadoutEstimateStddevHours ?? "?"} Std. (aus den letzten Auszahlungsabständen berechnet, keine Garantie)`
+    : "";
+
+  // Prognostizierter Tagesschnitt ueber die GANZE Woche (statt nur ueber die bisher
+  // vergangenen Tage, siehe "avgDailyBasis" gleich darunter) - Nutzer-Feedback
+  // 20.08.2026: "in Feld3 oben koennte eine Prognose unterhalb der grossen Zahl
+  // sichtbar sein". Nutzt denselben Wochenprojektionswert wie Feld2.
+  const avgDailyProjectionEl = document.getElementById("avgDailyProjection");
+  avgDailyProjectionEl.textContent = projection !== null
+    ? `~${fmtUsd(projection / 7)}`
+    : "—";
+  avgDailyProjectionEl.style.color = projection !== null ? "#3355FF" : "";
+
+  // Sparkline + Trend-Pfeil (letzte 8 Wochen) + Muster-/Notiz-Popover
+  renderSparkline(weekly);
+  renderInsightsPopover(data);
+
+  // Farbcodierung der Karten je nach Vorzeichen des jeweiligen Vergleichswerts
+  applyTrendBorder("cardThisWeek", data.thisWeekVsLastWeekPct);
+  applyTrendBorder("cardEurLast", data.lastWeekEurDirect !== null && data.lastWeekEurDirect !== undefined
+    ? data.thisWeekEur - data.lastWeekEurDirect
+    : null);
+  applyTrendBorder("cardMonth", data.lastMonthEur !== null && data.lastMonthEur !== undefined
+    ? data.thisMonthEur - data.lastMonthEur
+    : null);
+  applyTrendBorder("cardYear", data.lastYearEurSamePeriod !== null && data.lastYearEurSamePeriod !== undefined
+    ? data.thisYearEur - data.lastYearEurSamePeriod
+    : null);
 
   const tbody = document.getElementById("historyTableBody");
-  tbody.innerHTML = [...weekly].reverse().map(w => {
+  // Index nach ISO-Wochenschluessel ("2025-W34") fuer den exakten Vorjahresvergleich
+  // "dieselbe Kalenderwoche, ein Jahr zuvor" - praeziser als eine Datums-Naeherung
+  // (Nutzer-Feedback 19.08.2026: "muss auf sich bezogen sein", also an die eigene
+  // KW gebunden statt an einen zufaellig naheliegenden Tag).
+  const weekKeyIndex = {};
+  weekly.forEach((w, i) => { weekKeyIndex[isoWeekYearKey(new Date(w.weekStart))] = i; });
+  tbody.innerHTML = [...weekly].reverse().map((w, idxRev) => {
     const paid = w.status === "Paid";
     const statusLabel = paid ? "Ausgezahlt" : w.status === "Pending" ? "Ausstehend" : (w.status || "—");
     const statusColor = paid ? "#3FBF6F" : "#B35A0A";
     const avgPerDay = w.avgPerDayEur === null || w.avgPerDayEur === undefined ? "—" : fmtEur(w.avgPerDayEur);
-    return `<tr class="border-t" style="border-color:var(--card-border)"><td class="py-1">${fmtDateTime(w.weekStart)}</td><td>${fmtEur(w.eur)}</td><td class="font-num">${avgPerDay}</td><td style="color:${statusColor}">${statusLabel}</td></tr>`;
+    // idxRev zaehlt von neu nach alt - die chronologisch VORHERIGE Woche liegt im
+    // Original-Array einen Index weiter vorne, also hier bei (length-1-idxRev-1).
+    const origIdx = weekly.length - 1 - idxRev;
+    const prevWeek = origIdx > 0 ? weekly[origIdx - 1] : null;
+    let deltaCell = "—";
+    if (prevWeek && prevWeek.eur) {
+      const pct = ((w.eur - prevWeek.eur) / prevWeek.eur) * 100;
+      const up = pct >= 0;
+      deltaCell = `<span style="color:${up ? TREND_UP_COLOR : TREND_DOWN_COLOR}">${up ? "▲" : "▼"} ${Math.abs(pct).toFixed(1)}%</span>`;
+    }
+    const weekDate = new Date(w.weekStart);
+    const kwLabel = `KW${isoWeekNumber(weekDate)}`;
+    // Δ Vorjahr (damals): KEIN Vergleich zwischen den Jahren (Nutzer-Feedback
+    // 19.08.2026: "ich will keine Jahre vergleichen, ich will Wochen vergleichen" -
+    // ein Vergleich 2026 vs. 2025 waere bei einem wachsenden Geschaeft immer positiv
+    // und damit wenig aussagekraeftig). Stattdessen rein damals-intern: wie
+    // veraenderte sich die damalige Woche gegenueber IHRER Vorwoche (beide Werte aus
+    // demselben Jahr) - zeigt das Momentum von damals, direkt vergleichbar mit der
+    // "Δ Vorwoche"-Spalte.
+    let deltaYearCell = "—";
+    const [isoYear, isoWeekPart] = isoWeekYearKey(weekDate).split("-W");
+    const lastYearKey = `${Number(isoYear) - 1}-W${isoWeekPart}`;
+    const lastYearIdx = weekKeyIndex[lastYearKey];
+    if (lastYearIdx !== undefined && lastYearIdx > 0) {
+      const lastYearWeek = weekly[lastYearIdx];
+      const lastYearPrevWeek = weekly[lastYearIdx - 1];
+      if (lastYearPrevWeek && lastYearPrevWeek.eur) {
+        const pctY = ((lastYearWeek.eur - lastYearPrevWeek.eur) / lastYearPrevWeek.eur) * 100;
+        const upY = pctY >= 0;
+        deltaYearCell = `<span style="color:${upY ? TREND_UP_COLOR : TREND_DOWN_COLOR}" title="${fmtEur(lastYearPrevWeek.eur)} → ${fmtEur(lastYearWeek.eur)} (damals KW${isoWeekPart}, ${isoYear - 1})">${upY ? "▲" : "▼"} ${Math.abs(pctY).toFixed(1)}%</span>`;
+      }
+    }
+    return `<tr class="border-t" style="border-color:var(--card-border)"><td class="py-1">${fmtDateTime(w.weekStart)}</td><td class="font-num muted">${kwLabel}</td><td>${fmtEur(w.eur)}</td><td class="font-num">${avgPerDay}</td><td class="font-num">${deltaCell}</td><td class="font-num">${deltaYearCell}</td><td style="color:${statusColor}">${statusLabel}</td></tr>`;
   }).join("");
+
+  renderMonthlySummary(weekly);
+  renderNewsList(data.industryNews);
 
   updateChart(currentRange);
 }
 
-let currentRange = "daily";
+let currentRange = "weekly";
+// Wie viele Schritte das Balkendiagramm in die Vergangenheit geblaettert ist
+// (Nutzer-Feedback 20.08.2026: "Pfeile zum Durchblaettern der Historie") - 0 =
+// aktuelles Fenster. Wird bei jedem Tab-Wechsel zurueckgesetzt, siehe range-btn
+// Klick-Handler weiter unten.
+let barChartOffset = 0;
 
 // Montag-verankerter ISO-Wochenschluessel ("YYYY-MM-DD" des Wochenmontags) - rein
 // kalendarisch, unabhaengig vom ElevenLabs-Ablesezeitpunkt (fuer die visuelle
@@ -346,7 +1193,7 @@ function isoWeekKey(dateStr) {
 // sichtbar bei 11:59, statt erst beim ersten erfassten Punkt. Die Vortages-
 // Vergleichslinie (blau) erscheint erst, sobald ein volles Vorfenster erfasst
 // wurde (naturgemaess fruehestens am Folgetag).
-function buildDayCompare(intraday, readoutTimeWeeklyIso) {
+function buildDayCompare(intraday, readoutTimeWeeklyIso, daily) {
   if (!readoutTimeWeeklyIso) return null;
   const DAY_MS = 24 * 60 * 60 * 1000;
   const anchorMs = new Date(readoutTimeWeeklyIso).getTime();
@@ -383,39 +1230,81 @@ function buildDayCompare(intraday, readoutTimeWeeklyIso) {
     });
     return arr;
   };
+  // Vorjahres-Referenzpunkt: echte Stundenwerte von vor einem Jahr existieren nicht
+  // (Intraday-Erfassung startete erst 18.08.2026) - stattdessen der damalige
+  // Tages-ENDwert als flache gepunktete Referenzlinie (Nutzer-Feedback 19.08.2026).
+  const windowDateBerlin = new Date(windowStart).toLocaleDateString("en-CA", { timeZone: "Europe/Berlin" });
+  const lastYearDate = new Date(windowDateBerlin + "T00:00:00Z");
+  lastYearDate.setUTCDate(lastYearDate.getUTCDate() - 364);
+  const lastYearIso = lastYearDate.toISOString().slice(0, 10);
+  const lastYearEntry = (daily || []).find((d) => d.date === lastYearIso);
+
   return {
     labels,
     thisValues: bucketByOffset(thisWindow, windowStart),
     lastValues: lastWindow.length ? bucketByOffset(lastWindow, prevWindowStart) : null,
+    lastYearRefValue: lastYearEntry ? lastYearEntry.usd : null,
+    lastYearLabel: lastYearEntry
+      ? `Vorjahr (Tageswert ${lastYearIso.slice(8, 10)}.${lastYearIso.slice(5, 7)}.)`
+      : null,
     thisLabel: "Heute (ab Ablesezeit)",
     lastLabel: "Vortag (gleicher Zeitraum)",
   };
 }
 
-function buildWeekCompare(daily) {
-  const byWeek = {};
-  daily.forEach((p) => {
-    const wk = isoWeekKey(p.date);
-    (byWeek[wk] = byWeek[wk] || []).push(p);
-  });
-  const weekKeys = Object.keys(byWeek).sort();
-  if (weekKeys.length < 2) return null;
-  const thisWeekKey = weekKeys[weekKeys.length - 1];
-  const thisWeek = byWeek[thisWeekKey];
-  const lastWeek = byWeek[weekKeys[weekKeys.length - 2]];
-  const dayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-  // Volles Datum statt nur Wochentag - bei 7 Punkten ist genug Platz (Nutzer-Feedback).
-  const labels = dayNames.map((name, i) => {
-    const d = new Date(thisWeekKey + "T00:00:00Z");
-    d.setUTCDate(d.getUTCDate() + i);
-    return `${name} ${String(d.getUTCDate()).padStart(2, "0")}.${String(d.getUTCMonth() + 1).padStart(2, "0")}.`;
-  });
+// weekOffset (Nutzer-Feedback 20.08.2026: "Pfeile zum Durchblaettern der Historie"):
+// 0 = aktuelle Woche (Standard, unveraendertes Verhalten), 1 = eine Woche zurueck usw.
+// Nur vom Tagesumsatz-Balkendiagramm der "Tag"-Ansicht genutzt - das Liniendiagramm
+// der "Woche"-Ansicht ruft diese Funktion weiterhin ohne Offset auf.
+// Wochengrenzen sind am tatsaechlichen Abrechnungs-Rollover verankert (Tag mit
+// isWeekAnchor=true, siehe buildDailyHistoryWithBackfill() in Code.gs), NICHT mehr an
+// der ISO-Kalenderwoche (Nutzer-Feedback 21.08.2026: "das Koordinatensystem in KW34
+// muss immer am Starttag [der Ablesezeit] starten" - vorher begann die x-Achse bei
+// Montag 0 Uhr und die echte Ablesezeit wurde nur nachtraeglich als Linie
+// eingezeichnet, jetzt sitzt sie exakt auf Index 0).
+function buildWeekCompare(daily, weekOffset = 0) {
+  const sorted = [...daily].sort((a, b) => (a.date < b.date ? -1 : 1));
+  const anchorIdx = [];
+  sorted.forEach((r, i) => { if (r.isWeekAnchor) anchorIdx.push(i); });
+  const weekIdx = anchorIdx.length - 1 - weekOffset;
+  if (weekIdx < 1) return null; // braucht eine volle Vorwoche zum Vergleich
+  const thisStart = anchorIdx[weekIdx];
+  const thisEndExclusive = weekIdx + 1 < anchorIdx.length ? anchorIdx[weekIdx + 1] : sorted.length;
+  const thisWeek = sorted.slice(thisStart, thisEndExclusive);
+  const lastWeek = sorted.slice(anchorIdx[weekIdx - 1], thisStart);
+  const len = 7;
+  const dayNamesSun = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+  const labelFor = (row) => {
+    if (!row) return "";
+    const d = new Date(row.date + "T00:00:00Z");
+    return `${dayNamesSun[d.getUTCDay()]} ${String(d.getUTCDate()).padStart(2, "0")}.${String(d.getUTCMonth() + 1).padStart(2, "0")}.`;
+  };
+  const labels = Array.from({ length: len }, (_, i) => labelFor(thisWeek[i]) || labelFor(lastWeek[i]));
+  // Vorjahr: die Woche mit Ankertag exakt 364 Tage (52 Wochen) vor dieser Woche -
+  // gleiche Wochentag-Ausrichtung, damit die Punkte vergleichbar sind (Nutzer-Feedback
+  // 19.08.2026: "Vorjahr dagegenstellen, um Trend abzuleiten").
+  const lastYearAnchorDate = new Date(thisWeek[0].date + "T00:00:00Z");
+  lastYearAnchorDate.setUTCDate(lastYearAnchorDate.getUTCDate() - 364);
+  const lastYearAnchorIso = lastYearAnchorDate.toISOString().slice(0, 10);
+  const lastYearStartIdx = sorted.findIndex((r) => r.date === lastYearAnchorIso);
+  const lastYearWeek = lastYearStartIdx >= 0 ? sorted.slice(lastYearStartIdx, lastYearStartIdx + len) : null;
   return {
     labels,
-    thisValues: dayNames.map((_, i) => thisWeek[i]?.usd ?? null),
-    lastValues: dayNames.map((_, i) => lastWeek[i]?.usd ?? null),
+    thisValues: Array.from({ length: len }, (_, i) => thisWeek[i]?.usd ?? null),
+    lastValues: Array.from({ length: len }, (_, i) => lastWeek[i]?.usd ?? null),
+    lastYearValues: lastYearWeek ? Array.from({ length: len }, (_, i) => lastYearWeek[i]?.usd ?? null) : null,
+    // Echter Tagesumsatz (nicht der kumulierte Wochenzaehler) je Tag dieser Woche - fuer
+    // das Balkendiagramm "Tagesumsatz (diese Woche)" (Nutzer-Feedback 20.08.2026).
+    thisWeekDailyUsd: Array.from({ length: len }, (_, i) => thisWeek[i]?.tagesumsatzUsd ?? null),
+    // Dieselben Tagesumsaetze fuer Vorwoche und dieselbe KW im Vorjahr - Basis fuer die
+    // beiden Referenz-Durchschnittslinien im Balkendiagramm (Nutzer-Feedback 20.08.2026).
+    lastWeekDailyUsd: Array.from({ length: len }, (_, i) => lastWeek[i]?.tagesumsatzUsd ?? null),
+    lastYearWeekDailyUsd: lastYearWeek ? Array.from({ length: len }, (_, i) => lastYearWeek[i]?.tagesumsatzUsd ?? null) : null,
+    dayLabels: labels,
+    thisWeekMondayIso: thisWeek[0].date,
     thisLabel: "Diese Woche",
     lastLabel: "Vorwoche",
+    lastYearLabel: `Vorjahr (KW${isoWeekNumber(new Date(thisWeek[0].date + "T00:00:00Z"))})`,
   };
 }
 
@@ -438,12 +1327,223 @@ function buildMonthCompare(daily) {
     d.setUTCDate(d.getUTCDate() + i);
     return `${dayNames[d.getUTCDay()]} ${d.getUTCDate()}.${d.getUTCMonth() + 1}.`;
   });
+  // Vorjahr: derselbe Kalendermonat im Vorjahr (Nutzer-Feedback 19.08.2026).
+  const [thisMonthYear, thisMonthNum] = thisMonthKey.split("-");
+  const lastYearMonthKey = `${Number(thisMonthYear) - 1}-${thisMonthNum}`;
+  const lastYearMonth = byMonth[lastYearMonthKey] || null;
+  const monthNamesShort = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
   return {
     labels,
     thisValues: labels.map((_, i) => thisMonth[i]?.usd ?? null),
     lastValues: labels.map((_, i) => lastMonth[i]?.usd ?? null),
+    lastYearValues: lastYearMonth ? labels.map((_, i) => lastYearMonth[i]?.usd ?? null) : null,
     thisLabel: "Dieser Monat",
     lastLabel: "Vormonat",
+    lastYearLabel: `Vorjahr (${monthNamesShort[Number(thisMonthNum) - 1]})`,
+  };
+}
+
+// Hochrechnung des laufenden Monats aus dem bisherigen Datenstand (Nutzer-Feedback
+// 20.08.2026: "letzte der 12 Monate ist der aktuelle Monat mit hochgerechneter
+// Prognose") - dieselbe wochentag-bewusste Methode wie computeWeekProjection: fuer
+// jeden Tag des Monats der echte Tagesumsatz falls bekannt, sonst der
+// Wochentags-Durchschnitt (faellt auf den Gesamtschnitt zurueck, wenn fuer den
+// Wochentag noch keine eigene Historie vorliegt). Deckt sowohl vergangene Tage ohne
+// Wert (seltene Luecken) als auch die noch bevorstehenden Tage des Monats ab.
+function computeMonthProjection(daily, year, month) {
+  const { avgs } = computeWeekdayAverages(daily);
+  const withVal = daily.filter((d) => d.tagesumsatzUsd !== null && d.tagesumsatzUsd !== undefined);
+  const fallback = withVal.length ? withVal.reduce((a, d) => a + d.tagesumsatzUsd, 0) / withVal.length : 0;
+  const byDate = {};
+  daily.forEach((d) => { byDate[d.date] = d; });
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  let sum = 0;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const row = byDate[iso];
+    if (row && row.tagesumsatzUsd !== null && row.tagesumsatzUsd !== undefined) {
+      sum += row.tagesumsatzUsd;
+    } else {
+      const wd = new Date(iso + "T00:00:00Z").getUTCDay();
+      sum += avgs[wd] ?? fallback;
+    }
+  }
+  return sum;
+}
+
+// Balkendiagramm "Monatsumsätze" fuer die "Monat"-Ansicht, analog zum Tagesumsatz-
+// Balkendiagramm der Wochenansicht (Nutzer-Feedback 20.08.2026: "teile die
+// Verlaufsanzeige AUGUST ebenfalls auf in 2/3 Kurvendiagramm und 1/3
+// Monatsumsätze"). 13 statt 12 Kalendermonate (Nutzer-Feedback 20.08.2026: "sonst
+// fehlt der Vergleich zum Vorjahr optisch") - so ist immer auch derselbe Monat vor
+// einem Jahr als erster Balken mit dabei, direkt vergleichbar mit dem letzten
+// (laufenden) Balken. Der laufende Monat ist immer ganz rechts - bei Monatswechsel
+// ruecken alle Balken automatisch nach links, weil hier bei jedem Aufruf neu ab
+// "heute minus 12 Monate" gerechnet wird (keine gespeicherte Position).
+// offset (Nutzer-Feedback 20.08.2026: "Pfeile zum Durchblaettern der Historie") -
+// verschiebt das 13-Monats-Fenster um "offset" Monate in die Vergangenheit, 0 =
+// aktuelles Fenster (Standard, mit hochgerechnetem laufenden Monat als letztem
+// Balken). Bei offset > 0 sind alle gezeigten Monate bereits abgeschlossen, daher
+// keine Hochrechnung mehr (projectedIndex bleibt null).
+function buildMonthlyBars(data, offset = 0) {
+  const daily = data.history?.daily ?? [];
+  if (!daily.length) return null;
+  const byMonthTotal = {};
+  daily.forEach((d) => {
+    if (d.tagesumsatzUsd === null || d.tagesumsatzUsd === undefined) return;
+    const mk = d.date.slice(0, 7); // "YYYY-MM"
+    byMonthTotal[mk] = (byMonthTotal[mk] || 0) + d.tagesumsatzUsd;
+  });
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const monthKeys = [];
+  for (let i = 12; i >= 0; i--) {
+    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth() - offset - i, 1));
+    monthKeys.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`);
+  }
+  const monthNamesShort3 = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
+  // Kuerzere Beschriftung (Nutzer-Feedback 20.08.2026: "Monatsbeschriftung nicht
+  // gut") - Jahreszahl nur am ersten Balken und am Jahreswechsel (Januar), sonst
+  // reicht der Monatsname allein; bei 13 Balken in 1/3 Breite war "Sep 25" pro
+  // Balken zu breit fuer eine horizontale, gut lesbare Beschriftung.
+  const labels = monthKeys.map((mk, i) => {
+    const [y, m] = mk.split("-");
+    const showYear = i === 0 || m === "01";
+    return showYear ? `${monthNamesShort3[Number(m) - 1]} ${y.slice(2)}` : monthNamesShort3[Number(m) - 1];
+  });
+  const values = monthKeys.map((mk) => {
+    if (offset === 0 && mk === currentMonthKey) {
+      const [y, m] = mk.split("-");
+      return computeMonthProjection(daily, Number(y), Number(m));
+    }
+    return byMonthTotal[mk] !== undefined ? byMonthTotal[mk] : null;
+  });
+  const projectedIndex = offset === 0 ? monthKeys.indexOf(currentMonthKey) : -1;
+  return {
+    title: "Monatsumsätze (letzte 13 Monate)",
+    labels,
+    values,
+    unit: "$",
+    readoutDayIndex: null,
+    readoutLabel: "",
+    projectedIndex: projectedIndex >= 0 ? projectedIndex : null,
+    referenceLines: [],
+  };
+}
+
+// Balkendiagramm "Wochenerlöse" fuer die "Woche"-Ansicht (Nutzer-Feedback
+// 20.08.2026: das bisherige Tagesumsatz-Balkendiagramm zieht in die "Tag"-Ansicht
+// um, hier stattdessen echte Wochensummen). Letzte 12 Kalenderwochen (Montag-
+// verankert wie isoWeekKey), Summe der echten Tagesumsaetze je Woche - analog zu
+// buildMonthlyBars, nur auf Wochenebene statt Monatsebene.
+// offset (Nutzer-Feedback 20.08.2026: "Pfeile zum Durchblaettern der Historie") -
+// verschiebt das 12-Wochen-Fenster um "offset" Wochen in die Vergangenheit, 0 =
+// aktuelles Fenster (Standard).
+function buildWeeklyBars(data, offset = 0) {
+  const daily = data.history?.daily ?? [];
+  if (!daily.length) return null;
+  const byWeekTotal = {};
+  daily.forEach((d) => {
+    if (d.tagesumsatzUsd === null || d.tagesumsatzUsd === undefined) return;
+    const wk = isoWeekKey(d.date);
+    byWeekTotal[wk] = (byWeekTotal[wk] || 0) + d.tagesumsatzUsd;
+  });
+  const allWeekKeys = Object.keys(byWeekTotal).sort();
+  const end = allWeekKeys.length - offset;
+  const weekKeys = allWeekKeys.slice(Math.max(0, end - 12), end);
+  if (!weekKeys.length) return null;
+  const labels = weekKeys.map((wk) => `KW${isoWeekNumber(new Date(wk + "T00:00:00Z"))}`);
+  const values = weekKeys.map((wk) => byWeekTotal[wk]);
+
+  // Prognose fuer die laufende (noch nicht abgeschlossene) Woche als transparenter
+  // Balken-Aufsatz, analog zur Jahresansicht (Nutzer-Feedback 20.08.2026: "im
+  // rechten Balken fehlt noch der Prognose-Wert ... gerne wieder transparent oder
+  // dunkler"). Nur beim aktuellen 12-Wochen-Fenster (offset 0) und nur fuer die
+  // letzte (laufende) Woche - in zurueckgeblaetterten Fenstern sind alle gezeigten
+  // Wochen bereits abgeschlossen, dort ergibt eine Prognose keinen Sinn.
+  let projectionRemainder = null;
+  if (offset === 0) {
+    const projection = computeWeekProjection(data);
+    if (projection !== null) {
+      const lastIdx = weekKeys.length - 1;
+      projectionRemainder = weekKeys.map((wk, i) =>
+        i === lastIdx ? Math.max(0, projection - (byWeekTotal[wk] || 0)) : null
+      );
+    }
+  }
+
+  return {
+    title: "Wochenerlöse (letzte 12 Wochen)",
+    labels,
+    values,
+    projectionRemainder,
+    unit: "$",
+    readoutDayIndex: null,
+    readoutLabel: "",
+    projectedIndex: null,
+    referenceLines: [],
+  };
+}
+
+// Balkendiagramm "Jahresvergleich" fuer die "Jahr"-Ansicht (Nutzer-Feedback
+// 20.08.2026: 1/4 Breite statt 1/3 wie bei Woche/Monat) - alle Jahre als Balken
+// (EUR, aus data.history.yearly, bereits vom Backend aggregiert). Der Balken des
+// laufenden Jahres zeigt den echten Stand bis heute (data.thisYearEur); drei
+// Referenzlinien zeigen zusaetzlich "Vorjahr bis heute" (data.lastYearEurSamePeriod,
+// identisch zur Karte "Dieses Jahr"), "Vorjahr gesamt" (voller Vorjahreswert) und
+// eine Hochrechnung fuer dieses Jahr.
+function buildYearlyBars(data) {
+  const yearly = data.history?.yearly ?? [];
+  if (!yearly.length) return null;
+  const currentYear = String(new Date().getFullYear());
+  const currentYearIdx = yearly.findIndex((y) => y.year === currentYear);
+  const labels = yearly.map((y) => y.year);
+  const values = yearly.map((y) => (y.year === currentYear ? data.thisYearEur : y.eur));
+
+  const now = new Date();
+  const startOfYear = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+  const daysElapsed = Math.max(1, Math.floor((now - startOfYear) / (24 * 60 * 60 * 1000)) + 1);
+  const y = now.getUTCFullYear();
+  const isLeap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  const daysInYear = isLeap ? 366 : 365;
+  // Einfache proportionale Hochrechnung ("am bisherigen Tempo gemessen") statt der
+  // wochentag-bewussten Tagesbasis-Methode aus computeWeekProjection/
+  // computeMonthProjection - hier geht es direkt um den offiziellen EUR-Jahreswert,
+  // ohne 300+ Tage einzeln mit dem aktuellen FX-Kurs hochzurechnen.
+  const yearProjection = data.thisYearEur * (daysInYear / daysElapsed);
+  // Prognose zusaetzlich als transparenter Balken-Aufsatz sichtbar (Nutzer-Feedback
+  // 20.08.2026: "aehnlich wie im Monat August") - gestapelt ueber dem echten
+  // aktuellen Balken (siehe Chart-Aufbau unten: 2. Dataset + stacked scales), nicht
+  // nur als Linie. Nur beim laufenden Jahr befuellt, sonst ueberall null.
+  const projectionRemainder = yearly.map((yr, i) =>
+    i === currentYearIdx ? Math.max(0, yearProjection - data.thisYearEur) : null
+  );
+
+  // "Vorjahr gesamt" bewusst NICHT als eigene Referenzlinie - der Wert ist immer
+  // exakt identisch zur Hoehe des Vorjahres-Balkens direkt daneben (jedes Jahr hat
+  // ja seinen eigenen Balken), eine Linie dort wuerde nur die Balkenbeschriftung
+  // ueberlappen ohne neue Information zu zeigen (Nutzer-Feedback 20.08.2026: "kleine
+  // Zahlen nicht gut lesbar"). Der Balkenvergleich selbst deckt das bereits ab.
+  const referenceLines = [];
+  if (data.lastYearEurSamePeriod !== null && data.lastYearEurSamePeriod !== undefined) {
+    // Click-Blau statt Hellgrau (Nutzer-Feedback 20.08.2026: "auf Orange praktisch
+    // nicht sichtbar") - diese Linie liegt tief, meist ueber dem Balken selbst.
+    referenceLines.push({ value: data.lastYearEurSamePeriod, color: "#3355FF", dash: [2, 3], label: "Vorjahr bis heute", unit: "€" });
+  }
+  referenceLines.push({ value: yearProjection, color: "#e7e9f7", dash: [2, 3], label: "~Prognose", unit: "€" });
+
+  return {
+    title: "Jahresvergleich",
+    labels,
+    values,
+    projectionRemainder,
+    unit: "€",
+    fontSize: 12,
+    lineFontSize: 9,
+    readoutDayIndex: null,
+    readoutLabel: "",
+    projectedIndex: null,
+    referenceLines,
   };
 }
 
@@ -469,6 +1569,153 @@ function buildYearCompare(monthly) {
   };
 }
 
+// Vertikale gepunktete Linien an den taeglichen Zeitankern (z.B. 11:59) im Wochen-
+// Liniendiagramm (Nutzer-Feedback 20.08.2026: "aktuell verwirrt das, da es so den
+// Anschein macht, dass es um 0:00 stattfindet" - die Datenpunkte liegen NICHT um
+// Mitternacht, sondern zur woechentlichen Ablesezeit). Die Punkte selbst sitzen
+// bereits an der richtigen x-Position (numerische Zeit-Achse statt Kategorie-Achse,
+// siehe updateChart) - diese Linien machen den Anker zusaetzlich explizit sichtbar.
+const dailyAnchorLinePlugin = {
+  id: "dailyAnchorLine",
+  afterDatasetsDraw(chartInstance, _args, opts) {
+    const positions = opts?.positions;
+    if (!Array.isArray(positions) || !positions.length) return;
+    const { ctx, chartArea, scales } = chartInstance;
+    ctx.save();
+    ctx.strokeStyle = "#FF8A1F";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 3]);
+    positions.forEach((x) => {
+      const px = scales.x.getPixelForValue(x);
+      if (px < chartArea.left || px > chartArea.right) return;
+      ctx.beginPath();
+      ctx.moveTo(px, chartArea.top);
+      ctx.lineTo(px, chartArea.bottom);
+      ctx.stroke();
+    });
+    ctx.restore();
+  },
+};
+
+// Zeichnet eine gestrichelte Trennlinie + Beschriftung im Tagesumsatz-Balkendiagramm
+// genau an dem Tag, an dem die aktuelle Abrechnungsperiode beginnt (Ablesezeit) - die
+// Balken davor gehoeren noch zur Vorwoche (Nutzer-Feedback 20.08.2026). Als eigenes
+// Inline-Plugin statt externer CDN-Abhaengigkeit (Projekt-Prinzip "kein Build-Schritt").
+const readoutLinePlugin = {
+  id: "readoutLine",
+  afterDatasetsDraw(chartInstance, _args, opts) {
+    const idx = opts?.dayIndex;
+    if (idx === null || idx === undefined || idx <= 0) return;
+    const { ctx, chartArea, scales } = chartInstance;
+    const xScale = scales.x;
+    const bandWidth = xScale.getPixelForValue(1) - xScale.getPixelForValue(0);
+    const boundaryX = xScale.getPixelForValue(idx) - bandWidth / 2;
+    ctx.save();
+    ctx.strokeStyle = "#FF8A1F";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(boundaryX, chartArea.top);
+    ctx.lineTo(boundaryX, chartArea.bottom);
+    ctx.stroke();
+    ctx.fillStyle = "#FF8A1F";
+    ctx.font = "9px sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(opts?.label || "neue Woche", boundaryX + 3, chartArea.top + 9);
+    ctx.restore();
+  },
+};
+
+// Waagerechte gepunktete Referenzlinien im Tagesumsatz-Balkendiagramm: Gesamt-
+// Tagesdurchschnitt (data.avgDailyUsd, identisch zur Karte "Ø pro Tag"), plus
+// Durchschnitt Vorwoche und Durchschnitt derselben KW im Vorjahr (Nutzer-Feedback
+// 20.08.2026: "2 Linien einzeichnen"). opts.lines ist ein Array aus
+// {value, color, dash, label}, damit beliebig viele Referenzlinien mit demselben
+// Plugin gezeichnet werden koennen.
+const avgLinePlugin = {
+  id: "avgLine",
+  afterDatasetsDraw(chartInstance, _args, opts) {
+    const lines = opts?.lines;
+    if (!Array.isArray(lines) || !lines.length) return;
+    const { ctx, chartArea, scales } = chartInstance;
+    const valid = lines.filter((l) => l.value !== null && l.value !== undefined);
+    if (!valid.length) return;
+
+    // Linien selbst bleiben an ihrer echten Position (auch wenn zwei Werte fast
+    // gleich sind - das ist ja die korrekte Aussage).
+    valid.forEach((line) => {
+      const y = scales.y.getPixelForValue(line.value);
+      ctx.save();
+      ctx.strokeStyle = line.color || "#e7e9f7";
+      ctx.lineWidth = 1;
+      ctx.setLineDash(line.dash || [2, 3]);
+      ctx.beginPath();
+      ctx.moveTo(chartArea.left, y);
+      ctx.lineTo(chartArea.right, y);
+      ctx.stroke();
+      ctx.restore();
+    });
+
+    // Labels bei zu geringem Abstand vertikal auseinanderziehen (Nutzer-Feedback
+    // 20.08.2026: am Do 20.08. lagen zwei Referenzlinien im Tagesumsatz-Chart so
+    // nah beieinander, dass sich die Beschriftungen unlesbar ueberlagerten) -
+    // Reihenfolge oben->unten bleibt erhalten, nur der Mindestabstand wird erzwungen.
+    const fontSize = opts?.fontSize || 8;
+    const minGap = fontSize + 4;
+    const withY = valid
+      .map((line) => ({ line, y: scales.y.getPixelForValue(line.value) - 3 }))
+      .sort((a, b) => a.y - b.y);
+    for (let i = 1; i < withY.length; i++) {
+      if (withY[i].y - withY[i - 1].y < minGap) withY[i].y = withY[i - 1].y + minGap;
+    }
+    ctx.save();
+    ctx.font = `${fontSize}px sans-serif`;
+    ctx.textAlign = "right";
+    withY.forEach(({ line, y }) => {
+      ctx.fillStyle = line.color || "#e7e9f7";
+      ctx.fillText(`${line.label} ${fmtThousands(line.value)} ${line.unit || "$"}`, chartArea.right, y);
+    });
+    ctx.restore();
+  },
+};
+
+// Zeigt den $-Wert klein ueber jedem Balken im Tagesumsatz-Chart (Nutzer-Feedback
+// 20.08.2026) - kein chartjs-plugin-datalabels noetig (keine neue CDN-Abhaengigkeit,
+// Projekt-Prinzip "kein Build-Schritt"), stattdessen ein minimales Inline-Plugin.
+const barValueLabelsPlugin = {
+  id: "barValueLabels",
+  afterDatasetsDraw(chartInstance, _args, opts) {
+    const meta = chartInstance.getDatasetMeta(0);
+    const values = chartInstance.data.datasets[0].data;
+    const { ctx } = chartInstance;
+    ctx.save();
+    ctx.fillStyle = "#e7e9f7";
+    ctx.font = `${opts?.fontSize || 9}px sans-serif`;
+    ctx.textAlign = "center";
+    const unit = opts?.unit || "$";
+    meta.data.forEach((bar, i) => {
+      const v = values[i];
+      if (v === null || v === undefined) return;
+      // "~" vor dem Wert eines hochgerechneten Balkens (z.B. laufender Monat noch
+      // nicht abgeschlossen) - dieselbe Konvention wie "Progn. vorauss. bis ...: ~X"
+      // in Feld2 (Nutzer-Feedback 20.08.2026).
+      const prefix = i === opts?.projectedIndex ? "~" : "";
+      ctx.fillText(`${prefix}${fmtThousands(v)} ${unit}`, bar.x, bar.y - 4);
+    });
+    ctx.restore();
+  },
+};
+
+// Tagesanteil (0..1) der woechentlichen Ablesezeit, z.B. 11:59 -> ~0,499 - Basis
+// fuer die numerische Zeit-Achse im Wochen-Liniendiagramm (Nutzer-Feedback
+// 20.08.2026). Nutzt wie der Rest dieser Funktion die lokale Browser-Zeitzone
+// (praktisch: Europe/Berlin, da rein privat genutztes Dashboard).
+function computeAnchorFraction(readoutIso) {
+  if (!readoutIso) return 0;
+  const d = new Date(readoutIso);
+  return (d.getHours() + d.getMinutes() / 60) / 24;
+}
+
 function updateChart(range) {
   currentRange = range;
   if (!latestData) return;
@@ -479,6 +1726,15 @@ function updateChart(range) {
   });
 
   let labels, datasets, chartType;
+  let sideBarChart = null; // nur in Wochen-/Monatsansicht befuellt, siehe Balkendiagramm unten
+  // Numerische Zeit-Achse statt Kategorie-Achse nur in der Wochenansicht (Nutzer-
+  // Feedback 20.08.2026) - macht sichtbar, dass die Datenpunkte an der taeglichen
+  // Ablesezeit liegen, nicht um 0:00. In Tag-/Monat-/Jahr-/Gesamt-Ansicht bleibt es
+  // bei der bisherigen, einfacheren Kategorie-Achse (dort weniger relevant/zu grobe
+  // Skala, siehe Chat 20.08.2026).
+  let weeklyTimeAxis = false;
+  let weeklyAnchorFraction = 0;
+  let dailyAnchorLines = null;
 
   if (range === "total") {
     // "Gesamt": voller Verlauf seit Beginn der Aufzeichnung, ohne Vergleichslinie.
@@ -488,11 +1744,23 @@ function updateChart(range) {
       const iso = p.weekStart || "";
       return iso ? `${iso.slice(5, 7)}.${iso.slice(0, 4)}` : "";
     });
+    currentSeasonalHints = computeSeasonalDips(series);
+    currentHolidayHints = computeHolidayHints(series);
+    currentNewsHints = computeNewsHints(series, latestData.industryNews);
+    // Vier Punkt-Aussehen im "Gesamt"-Chart, in dieser Prioritaet bei Ueberschneidung:
+    // saisonaler Einbruch (Blau, gross) > Branchennews (Lila) > Ferien (Gruen) >
+    // Normalfall (Orange, klein). News vor Ferien, weil News inhaltlich konkreter/
+    // interessanter sind als ein wiederkehrender Kalender-Hinweis.
+    const pointKind = (i) => (currentSeasonalHints[i] ? "dip" : currentNewsHints[i] ? "news" : currentHolidayHints[i] ? "holiday" : "normal");
+    const pointColor = { dip: "#3355FF", news: "#a855f7", holiday: "#3FBF6F", normal: "#FF8A1F" };
     datasets = [
       {
         data: series.map((p) => p.eur ?? 0),
         borderColor: "#FF8A1F",
-        backgroundColor: "#FF8A1F",
+        backgroundColor: series.map((_, i) => pointColor[pointKind(i)]),
+        pointRadius: series.map((_, i) => (pointKind(i) === "normal" ? 2 : pointKind(i) === "dip" ? 5 : 4)),
+        pointBorderColor: series.map((_, i) => (pointKind(i) === "normal" ? "#FF8A1F" : "#ffffff")),
+        pointBorderWidth: series.map((_, i) => (pointKind(i) === "normal" ? 0 : 2)),
         borderWidth: 2,
         tension: 0.3,
         fill: false,
@@ -500,23 +1768,109 @@ function updateChart(range) {
     ];
     chartType = "line";
   } else {
+    currentSeasonalHints = {};
+    currentHolidayHints = {};
+    currentNewsHints = {};
     const cmp =
       range === "daily"
-        ? buildDayCompare(latestData.history?.intraday ?? [], latestData.readoutTimeWeekly)
+        ? buildDayCompare(latestData.history?.intraday ?? [], latestData.readoutTimeWeekly, latestData.history?.daily ?? [])
         : range === "weekly"
         ? buildWeekCompare(latestData.history?.daily ?? [])
         : range === "monthly"
         ? buildMonthCompare(latestData.history?.daily ?? [])
         : buildYearCompare(latestData.history?.monthly ?? []);
 
+    // Balkendiagramm neben der Linie - Inhalt je nach Ansicht (Nutzer-Feedback
+    // 20.08.2026): in "Tag" das Tagesumsatz-Balkendiagramm der aktuellen Woche (mit
+    // Ablesezeit-Grenze + Referenzlinien, urspruenglich in "Woche" gebaut - zog
+    // hierher um), in "Woche" die letzten 12 Wochenerloese, in "Monat" die letzten
+    // 12 Monatsumsaetze (siehe buildMonthlyBars), in "Jahr" der Jahresvergleich
+    // (siehe buildYearlyBars, dort auch 1/4 statt 1/3 Breite).
+    if (range === "daily") {
+      const weekCmp = buildWeekCompare(latestData.history?.daily ?? [], barChartOffset);
+      if (weekCmp) {
+        // Die Ablesezeit-Grenze/Referenzlinien beziehen sich auf die AKTUELLE Woche
+        // (latestData.avgDailyUsd etc. sind laufende Werte) - bei einer in die
+        // Vergangenheit geblaetterten Woche (Nutzer-Feedback 20.08.2026: "Pfeile zum
+        // Durchblaettern") waeren sie irrefuehrend, daher nur bei offset===0 gesetzt.
+        let readoutDayIndex = null;
+        let readoutLabel = "";
+        let referenceLines = [];
+        if (barChartOffset === 0) {
+          // Die Balken sind Montag-verankert (Kalenderwoche), die tatsaechliche
+          // Abrechnungsperiode beginnt aber erst mit der Ablesezeit - Tage davor
+          // gehoeren noch zur Vorwoche (Nutzer-Feedback 20.08.2026: "optisch
+          // kenntlich machen, ab welchem Tag die neue Zeitrechnung laeuft").
+          if (latestData.readoutTimeWeekly && weekCmp.thisWeekMondayIso) {
+            const mondayMs = new Date(weekCmp.thisWeekMondayIso + "T00:00:00Z").getTime();
+            const readoutMs = new Date(latestData.readoutTimeWeekly).getTime();
+            const idx = Math.round((readoutMs - mondayMs) / (24 * 60 * 60 * 1000));
+            if (idx >= 0 && idx <= 6) readoutDayIndex = idx;
+          }
+          const readoutTimeLabel = latestData.readoutTimeWeekly
+            ? new Date(latestData.readoutTimeWeekly).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })
+            : "";
+          const readoutDayName = readoutDayIndex !== null ? weekCmp.dayLabels[readoutDayIndex] : "";
+          readoutLabel = readoutDayIndex !== null ? `neue Woche ab ${readoutDayName}, ${readoutTimeLabel}` : "neue Woche";
+          // Durchschnitt Vorwoche + Durchschnitt derselben KW im Vorjahr als
+          // zusaetzliche Referenzlinien im Balkendiagramm (Nutzer-Feedback 20.08.2026).
+          const avgOf = (arr) => {
+            const vals = (arr || []).filter((v) => v !== null && v !== undefined);
+            return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+          };
+          referenceLines = [
+            { value: latestData.avgDailyUsd, color: "#e7e9f7", dash: [2, 3], label: "Ø" },
+            { value: avgOf(weekCmp.lastYearWeekDailyUsd), color: "#9aa0c7", dash: [2, 3], label: "Ø Vorjahr" },
+            { value: avgOf(weekCmp.lastWeekDailyUsd), color: "#3355FF", dash: [2, 3], label: "Ø Vorwoche" },
+          ].filter((l) => l.value !== null && l.value !== undefined);
+        }
+        sideBarChart = {
+          title: barChartOffset === 0
+            ? "Tagesumsatz (diese Woche)"
+            : `Tagesumsatz (KW${isoWeekNumber(new Date(weekCmp.thisWeekMondayIso + "T00:00:00Z"))})`,
+          labels: weekCmp.dayLabels,
+          values: weekCmp.thisWeekDailyUsd,
+          unit: "$",
+          readoutDayIndex,
+          readoutLabel,
+          projectedIndex: null,
+          referenceLines,
+          canGoBack: !!buildWeekCompare(latestData.history?.daily ?? [], barChartOffset + 1),
+        };
+      }
+    }
+
+    if (range === "weekly") {
+      sideBarChart = buildWeeklyBars(latestData, barChartOffset);
+      if (sideBarChart) sideBarChart.canGoBack = !!buildWeeklyBars(latestData, barChartOffset + 1);
+    }
+
+    if (range === "monthly") {
+      sideBarChart = buildMonthlyBars(latestData, barChartOffset);
+      if (sideBarChart) sideBarChart.canGoBack = !!buildMonthlyBars(latestData, barChartOffset + 1);
+    }
+
+    if (range === "yearly") {
+      // Zeigt immer alle Jahre - kein "Fenster", das sich verschieben liesse, daher
+      // hier keine Pfeil-Navigation (canGoBack bleibt false).
+      sideBarChart = buildYearlyBars(latestData);
+      if (sideBarChart) sideBarChart.canGoBack = false;
+    }
+
     if (cmp) {
       labels = cmp.labels;
+      // Bis 21.08.2026 lief hier eine numerische Zeit-Achse mit Tagesanteil-Verschiebung,
+      // weil buildWeekCompare() Kalenderwochen (Mo-So) lieferte und die echte Ablesezeit
+      // nur nachtraeglich als Linie markiert wurde. Seit dem Umbau auf Abrechnungs-
+      // Wochenanker (siehe buildWeekCompare()) sitzt der Anker bereits exakt auf Index 0
+      // - keine Fraktion/Anker-Linie mehr noetig, einfache Kategorie-Achse reicht.
+      const toXY = (arr) => arr.map((v, i) => ({ x: i + weeklyAnchorFraction, y: v === null || v === undefined ? null : v }));
       // Aktuelle Periode = Amber (durchgezogen, dick), Vorperiode = klares Blau
       // (duenner, gestrichelt) - deutlich unterscheidbar (Nutzer-Feedback 18.08.2026).
       datasets = [
         {
           label: cmp.thisLabel,
-          data: cmp.thisValues,
+          data: weeklyTimeAxis ? toXY(cmp.thisValues) : cmp.thisValues,
           borderColor: "#FF8A1F",
           backgroundColor: "#FF8A1F",
           borderWidth: 3,
@@ -531,7 +1885,7 @@ function updateChart(range) {
       if (cmp.lastValues) {
         datasets.push({
           label: cmp.lastLabel,
-          data: cmp.lastValues,
+          data: weeklyTimeAxis ? toXY(cmp.lastValues) : cmp.lastValues,
           borderColor: "#3355FF",
           backgroundColor: "#3355FF",
           borderWidth: 1.5,
@@ -539,6 +1893,37 @@ function updateChart(range) {
           tension: 0.3,
           fill: false,
           spanGaps: true,
+        });
+      }
+      // Vorjahres-Vergleichslinie: duenn, grau, fein gepunktet (Nutzer-Feedback
+      // 19.08.2026). Bei Woche/Monat ein echter Verlauf, bei "Tag" mangels
+      // stuendlicher Vorjahresdaten (Intraday-Erfassung erst seit 18.08.2026) nur
+      // eine flache Referenzlinie beim damaligen Tages-ENDwert.
+      if (cmp.lastYearValues) {
+        datasets.push({
+          label: cmp.lastYearLabel,
+          data: weeklyTimeAxis ? toXY(cmp.lastYearValues) : cmp.lastYearValues,
+          borderColor: "#9aa0c7",
+          backgroundColor: "#9aa0c7",
+          borderWidth: 1,
+          borderDash: [2, 3],
+          tension: 0.3,
+          fill: false,
+          spanGaps: true,
+        });
+      } else if (cmp.lastYearRefValue !== null && cmp.lastYearRefValue !== undefined) {
+        datasets.push({
+          label: cmp.lastYearLabel,
+          data: weeklyTimeAxis
+            ? [0, 1, 2, 3, 4, 5, 6].map((i) => ({ x: i + weeklyAnchorFraction, y: cmp.lastYearRefValue }))
+            : labels.map(() => cmp.lastYearRefValue),
+          borderColor: "#9aa0c7",
+          backgroundColor: "#9aa0c7",
+          borderWidth: 1,
+          borderDash: [2, 3],
+          pointRadius: 0,
+          tension: 0,
+          fill: false,
         });
       }
     } else {
@@ -571,19 +1956,67 @@ function updateChart(range) {
   }
 
   if (chart) chart.destroy();
+  // X-Achse: normalerweise Kategorie-Achse (ein Slot pro Label), in der Wochenansicht
+  // stattdessen eine numerische Zeit-Achse 0..7 (siehe weeklyTimeAxis oben) - die
+  // ganzzahligen Ticks 0-6 zeigen weiterhin die gewohnten Tageslabels, die
+  // Datenpunkte selbst sitzen aber am tatsaechlichen Ablesezeit-Anker dazwischen.
+  const xScaleConfig = weeklyTimeAxis
+    ? {
+        type: "linear",
+        min: 0,
+        max: 7,
+        ticks: {
+          stepSize: 1,
+          color: "#9aa0c7",
+          callback: (value) => (Number.isInteger(value) ? labels[value] ?? "" : ""),
+        },
+        grid: { color: "rgba(148, 163, 199, 0.35)" },
+      }
+    : {
+        ticks: { maxTicksLimit: 12, color: "#9aa0c7" },
+        grid: { color: "rgba(148, 163, 199, 0.35)" },
+      };
   chart = new Chart(document.getElementById("historyChart"), {
     type: chartType,
     data: { labels, datasets },
+    plugins: [dailyAnchorLinePlugin],
     options: {
-      plugins: { legend: { display: datasets.length > 1 } },
+      plugins: {
+        legend: { display: datasets.length > 1 },
+        dailyAnchorLine: { positions: dailyAnchorLines },
+        // Saisonale Hinweise + Ferien-/Branchennews-Info-Punkte als Tooltip-
+        // Zusatzzeile(n) bei markierten Punkten in der "Gesamt"-Ansicht (Nutzer-
+        // Feedback 19./20.08.2026).
+        tooltip: {
+          callbacks: {
+            // Bei der numerischen Zeit-Achse zeigt Chart.js im Titel sonst die rohe
+            // x-Zahl (z.B. "0.499") statt des Tageslabels - hier zurueck auf den
+            // Tagesnamen mappen (Nutzer-Feedback 20.08.2026).
+            title: (items) => {
+              if (weeklyTimeAxis && items.length) {
+                const dayIdx = Math.floor(items[0].parsed.x);
+                return labels[dayIdx] ?? "";
+              }
+              return undefined;
+            },
+            afterLabel: (context) => {
+              const parts = [
+                currentSeasonalHints[context.dataIndex],
+                currentNewsHints[context.dataIndex],
+                currentHolidayHints[context.dataIndex],
+              ].filter(Boolean);
+              return parts.length ? parts.join("\n").split("\n") : undefined;
+            },
+          },
+        },
+      },
       // Gitternetzlinien waren auf dem dunklen Hintergrund kaum sichtbar
       // (Nutzer-Feedback 18.08.2026) - deutlich sichtbareres Grau/Blau statt der
       // Chart.js-Standardfarbe.
+      responsive: true,
+      maintainAspectRatio: false,
       scales: {
-        x: {
-          ticks: { maxTicksLimit: 12, color: "#9aa0c7" },
-          grid: { color: "rgba(148, 163, 199, 0.35)" },
-        },
+        x: xScaleConfig,
         y: {
           ticks: { color: "#9aa0c7" },
           grid: { color: "rgba(148, 163, 199, 0.35)" },
@@ -591,11 +2024,276 @@ function updateChart(range) {
       },
     },
   });
+
+  // Balkendiagramm neben der Linie - Inhalt je nach Ansicht, siehe die build*Bars()-
+  // Funktionen oben (Nutzer-Feedback 20.08.2026). In der Jahresansicht 1/4 statt
+  // 1/3 Breite (weniger Balken - aktuell nur 2025+2026).
+  const dailyBarWrap = document.getElementById("dailyBarWrap");
+  const prevBtn = document.getElementById("barChartPrevBtn");
+  const nextBtn = document.getElementById("barChartNextBtn");
+  if (sideBarChart) {
+    dailyBarWrap.classList.remove("hidden");
+    dailyBarWrap.style.width = range === "yearly" ? "25%" : "33%";
+    document.getElementById("dailyBarTitle").textContent = sideBarChart.title || "";
+    // Pfeil-Navigation: "◂" nur aktiv, wenn weitere Historie existiert; "▸" nur
+    // aktiv, wenn bereits zurueckgeblaettert wurde (zurueck zur Gegenwart).
+    prevBtn.style.visibility = sideBarChart.canGoBack ? "visible" : "hidden";
+    nextBtn.style.visibility = barChartOffset > 0 ? "visible" : "hidden";
+    if (dailyBarChart) dailyBarChart.destroy();
+    const unit = sideBarChart.unit || "$";
+    // Balken vor der Ablesezeit (noch Vorwoche) in Blau, ab der Ablesezeit in Amber -
+    // dieselbe Farbsprache wie ueberall sonst im Dashboard (Amber = aktuelle Periode,
+    // Blau = Vorperiode). Ein hochgerechneter Balken (laufender Monat, noch nicht
+    // abgeschlossen) bekommt stattdessen ein helleres/transparentes Amber, damit er
+    // optisch klar als "noch nicht final" erkennbar ist (zusaetzlich zum "~" vor dem
+    // Wert, siehe barValueLabelsPlugin).
+    const barColors = sideBarChart.labels.map((_, i) => {
+      if (i === sideBarChart.projectedIndex) return "rgba(255, 138, 31, 0.45)";
+      return sideBarChart.readoutDayIndex !== null && i < sideBarChart.readoutDayIndex ? "#3355FF" : "#FF8A1F";
+    });
+    // Referenzlinien kommen direkt vom jeweiligen build*Bars() (leeres Array, wenn
+    // fuer diese Ansicht keine vorgesehen sind, z.B. Wochenerloese).
+    const refLines = (sideBarChart.referenceLines || []).filter((l) => l.value !== null && l.value !== undefined);
+    // Prognose als transparenter Balken-Aufsatz auf dem echten Balken (Nutzer-
+    // Feedback 20.08.2026: "aehnlich wie im Monat August", nur mit sichtbarem
+    // Ist-Wert darunter statt nur dem Prognose-Wert) - ein 2. gestapeltes Dataset,
+    // das bei allen anderen Balken/Ansichten leer bleibt (kein Effekt dort).
+    const hasProjectionOverlay = Array.isArray(sideBarChart.projectionRemainder) &&
+      sideBarChart.projectionRemainder.some((v) => v !== null && v !== undefined);
+    const datasets = [{ data: sideBarChart.values, backgroundColor: barColors, borderRadius: 4, stack: "bar" }];
+    if (hasProjectionOverlay) {
+      datasets.push({
+        data: sideBarChart.projectionRemainder,
+        backgroundColor: "rgba(255, 138, 31, 0.3)",
+        borderRadius: 4,
+        stack: "bar",
+      });
+    }
+    // Etwas Kopffreiraum ueber dem hoechsten Balken (inkl. Prognose-Aufsatz), damit
+    // die Wert-Beschriftung (barValueLabelsPlugin) nicht mit dem Kartenrand kollidiert.
+    const stackedTotals = sideBarChart.values.map((v, i) => (v ?? 0) + (sideBarChart.projectionRemainder?.[i] ?? 0));
+    const barMaxCandidates = [...stackedTotals, ...refLines.map((l) => l.value)];
+    const barYMax = barMaxCandidates.length ? Math.max(...barMaxCandidates) * 1.25 : undefined;
+    dailyBarChart = new Chart(document.getElementById("dailyBarChart"), {
+      type: "bar",
+      data: { labels: sideBarChart.labels, datasets },
+      plugins: [readoutLinePlugin, barValueLabelsPlugin, avgLinePlugin],
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          readoutLine: { dayIndex: sideBarChart.readoutDayIndex, label: sideBarChart.readoutLabel },
+          avgLine: { lines: refLines, fontSize: sideBarChart.lineFontSize || sideBarChart.fontSize },
+          barValueLabels: { projectedIndex: sideBarChart.projectedIndex, unit, fontSize: sideBarChart.fontSize },
+          // Ohne Override zeigt Chart.js beim gestapelten Prognose-Aufsatz (2. Dataset)
+          // nur dessen eigenen Wert (den Restbetrag, z.B. "152,24") - das wirkte wie
+          // eine falsche/verwirrende Zahl (Nutzer-Feedback 20.08.2026: "was ist mit
+          // 152,236 gemeint?"). Beim Hover auf den Aufsatz jetzt stattdessen die
+          // hochgerechnete GESAMTsumme (Ist + Restbetrag) zeigen.
+          tooltip: {
+            callbacks: {
+              label(ctx) {
+                if (ctx.datasetIndex === 1) {
+                  const real = ctx.chart.data.datasets[0].data[ctx.dataIndex] || 0;
+                  const total = real + (ctx.parsed.y || 0);
+                  return `Prognose gesamt: ~${fmtThousands(total)} ${unit}`;
+                }
+                // Nutzer-Feedback 21.08.2026: "so wie es ist, ist das too much, die
+                // Werte stehen ja ueber den Balken" - der Wert selbst steht schon als
+                // Beschriftung ueber dem Balken (barValueLabelsPlugin), der Tooltip
+                // wiederholte ihn nur. Stattdessen jetzt die Veraenderung zum
+                // VORHERIGEN Balken in Prozent (echter Mehrwert statt Wiederholung).
+                const prev = ctx.dataIndex > 0 ? ctx.chart.data.datasets[0].data[ctx.dataIndex - 1] : null;
+                if (prev === null || prev === undefined || prev === 0) {
+                  return `${fmtThousands(ctx.parsed.y)} ${unit}`;
+                }
+                const pct = ((ctx.parsed.y - prev) / Math.abs(prev)) * 100;
+                const up = pct >= 0;
+                return `${up ? "▲" : "▼"} ${Math.abs(pct).toFixed(1)}%`;
+              },
+            },
+          },
+        },
+        scales: {
+          // Horizontal statt schraeg (Nutzer-Feedback 20.08.2026: "Monatsbeschriftung
+          // in der X-Achse ist nicht gut") - bei vielen Balken (Woche/Monat) laesst
+          // Chart.js dafuer automatisch einzelne Beschriftungen aus (autoSkip), statt
+          // sie schraeg zu quetschen.
+          // stacked:true noetig fuer den Prognose-Balken-Aufsatz (2. Dataset) im
+          // Jahresvergleich - bei nur einem Dataset (alle anderen Ansichten) ohne
+          // Effekt, daher hier fuer alle Balkendiagramme gesetzt statt bedingt.
+          x: { stacked: true, ticks: { color: "#9aa0c7", font: { size: 10 }, maxRotation: 0, autoSkip: true }, grid: { display: false } },
+          y: { stacked: true, suggestedMax: barYMax, ticks: { color: "#9aa0c7" }, grid: { color: "rgba(148, 163, 199, 0.35)" } },
+        },
+      },
+    });
+  } else {
+    dailyBarWrap.classList.add("hidden");
+    if (dailyBarChart) {
+      dailyBarChart.destroy();
+      dailyBarChart = null;
+    }
+  }
 }
 
 document.querySelectorAll(".range-btn").forEach((b) =>
-  b.addEventListener("click", () => updateChart(b.dataset.range))
+  b.addEventListener("click", () => {
+    barChartOffset = 0; // Tab-Wechsel setzt die Balkendiagramm-Navigation zurueck
+    updateChart(b.dataset.range);
+  })
 );
+
+// Pfeil-Navigation im Balkendiagramm (Nutzer-Feedback 20.08.2026: "links von den
+// Balken einen Pfeil, der nach links zeigt, um die Werte davor sichtbar zu machen
+// (schrittweise) und nach Linksklick dann auch wieder nach rechts").
+document.getElementById("barChartPrevBtn").addEventListener("click", () => {
+  barChartOffset += 1;
+  updateChart(currentRange);
+});
+document.getElementById("barChartNextBtn").addEventListener("click", () => {
+  if (barChartOffset > 0) barChartOffset -= 1;
+  updateChart(currentRange);
+});
+
+// Ausklappbarer Bereich "Alle Auszahlungen" - standardmaessig eingeklappt, damit
+// die lange Liste nicht den Fokus von Tages-/Wochenwerten nimmt (Nutzer-Feedback
+// 19.08.2026).
+document.getElementById("payoutToggle").addEventListener("click", () => {
+  const content = document.getElementById("payoutContent");
+  const label = document.getElementById("payoutToggleLabel");
+  const nowHidden = content.classList.toggle("hidden");
+  label.textContent = nowHidden ? "▸ anzeigen" : "▾ verbergen";
+});
+
+// Tabs "Auszahlungen"/"News" im selben Feld statt eigener Seite (Nutzer-
+// Entscheidung 20.08.2026: "dann bleiben wir auf der Seite und wechseln nicht" -
+// die zuvor gebaute news.html wurde deshalb wieder verworfen). Ein Tab-Klick
+// klappt den Bereich bei Bedarf gleich mit auf.
+function showPayoutTab(tab) {
+  const content = document.getElementById("payoutContent");
+  const label = document.getElementById("payoutToggleLabel");
+  content.classList.remove("hidden");
+  label.textContent = "▾ verbergen";
+  const isNews = tab === "news";
+  document.getElementById("payoutsView").classList.toggle("hidden", isNews);
+  document.getElementById("newsView").classList.toggle("hidden", !isNews);
+  document.getElementById("csvExportBtn").classList.toggle("hidden", isNews);
+  document.getElementById("tabPayoutsBtn").style.color = isNews ? "" : "#FF8A1F";
+  document.getElementById("tabPayoutsBtn").classList.toggle("muted", isNews);
+  document.getElementById("tabNewsBtn").style.color = isNews ? "#FF8A1F" : "";
+  document.getElementById("tabNewsBtn").classList.toggle("muted", !isNews);
+}
+document.getElementById("tabPayoutsBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  showPayoutTab("payouts");
+});
+document.getElementById("tabNewsBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  showPayoutTab("news");
+});
+
+function fmtNewsDate(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+function renderNewsList(items) {
+  const el = document.getElementById("newsListBody");
+  if (!items || !items.length) {
+    el.innerHTML = `<p class="text-sm muted py-4 text-center">Noch keine Branchennews vorhanden.</p>`;
+    return;
+  }
+  el.innerHTML = items
+    .map(
+      (n, i) => `
+    <a href="${escapeHtml(n.link)}" target="_blank" rel="noopener noreferrer"
+       class="flex items-start gap-3 py-1.5${i > 0 ? " border-t" : ""}"
+       style="text-decoration:none; color:inherit; border-color:var(--card-border);">
+      <span class="font-num text-xs muted pt-0.5" style="min-width:66px;">${fmtNewsDate(n.date)}</span>
+      <span class="flex-1 text-sm">${escapeHtml(n.title)}</span>
+      <span class="text-xs muted" style="white-space:nowrap;">${escapeHtml(n.source)}</span>
+    </a>`
+    )
+    .join("");
+}
+
+// Monatsübersicht in "Alle Auszahlungen" (Nutzer-Feedback 20.08.2026: für den
+// schnellen Überblick, z.B. beim Steuer-Nachweis "wie viel kam in Monat X rein").
+// Gruppiert clientseitig aus den ohnehin geladenen Wochendaten statt einen eigenen
+// Backend-Aufruf zu brauchen - Monat = Kalendermonat des Wochenstart-Datums.
+const monthNamesLong = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+function renderMonthlySummary(weekly) {
+  const byMonth = {};
+  weekly.forEach((w) => {
+    const mk = w.weekStart.slice(0, 7); // "YYYY-MM"
+    (byMonth[mk] = byMonth[mk] || []).push(w);
+  });
+  const monthKeys = Object.keys(byMonth).sort();
+  const tbody = document.getElementById("monthlySummaryBody");
+  tbody.innerHTML = [...monthKeys].reverse().map((mk, idxRev) => {
+    const rows = byMonth[mk];
+    const sumEur = rows.reduce((a, w) => a + (w.eur || 0), 0);
+    const avgPerWeek = sumEur / rows.length;
+    const origIdx = monthKeys.length - 1 - idxRev;
+    const prevKey = origIdx > 0 ? monthKeys[origIdx - 1] : null;
+    const prevSum = prevKey ? byMonth[prevKey].reduce((a, w) => a + (w.eur || 0), 0) : null;
+    let deltaCell = "—";
+    if (prevSum) {
+      const pct = ((sumEur - prevSum) / prevSum) * 100;
+      const up = pct >= 0;
+      deltaCell = `<span style="color:${up ? TREND_UP_COLOR : TREND_DOWN_COLOR}">${up ? "▲" : "▼"} ${Math.abs(pct).toFixed(1)}%</span>`;
+    }
+    const [y, m] = mk.split("-");
+    const monthLabel = `${monthNamesLong[Number(m) - 1]} ${y}`;
+    return `<tr class="border-t" style="border-color:var(--card-border)"><td class="py-1">${monthLabel}</td><td class="font-num muted">${rows.length}</td><td>${fmtEur(sumEur)}</td><td class="font-num">${fmtEur(avgPerWeek)}</td><td class="font-num">${deltaCell}</td></tr>`;
+  }).join("");
+}
+
+// CSV-Export "Alle Auszahlungen" (Nutzer-Feedback 20.08.2026): unabhängige, lokal
+// archivierbare Momentaufnahme für Steuerunterlagen bzw. als Absicherung, falls
+// ElevenLabs die Seite ändert oder der Google-Zugriff mal fehlt - rein clientseitig
+// per Blob-Download, kein Server/keine Fremdübertragung beteiligt. Semikolon als
+// Trenner + Komma als Dezimaltrennzeichen (deutsches Excel-Standardformat), UTF-8-
+// BOM voran, damit Umlaute/€ beim direkten Öffnen in Excel korrekt erscheinen.
+function csvEscape(v) {
+  const s = String(v ?? "");
+  return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+function exportPayoutsCsv() {
+  const weekly = latestData?.history?.weekly ?? [];
+  const header = ["Woche ab", "KW", "EUR", "Ø pro Tag (EUR)", "Status"];
+  const rows = weekly.map((w) => {
+    const paid = w.status === "Paid";
+    const statusLabel = paid ? "Ausgezahlt" : w.status === "Pending" ? "Ausstehend" : (w.status || "");
+    return [
+      new Date(w.weekStart).toLocaleDateString("de-DE"),
+      `KW${isoWeekNumber(new Date(w.weekStart))}`,
+      Number(w.eur ?? 0).toFixed(2).replace(".", ","),
+      w.avgPerDayEur === null || w.avgPerDayEur === undefined ? "" : Number(w.avgPerDayEur).toFixed(2).replace(".", ","),
+      statusLabel,
+    ];
+  });
+  const csvContent = [header, ...rows].map((r) => r.map(csvEscape).join(";")).join("\r\n");
+  const blob = new Blob(["﻿" + csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `elevenlabs-auszahlungen-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+document.getElementById("csvExportBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  exportPayoutsCsv();
+});
 
 async function tick() {
   try {
@@ -603,15 +2301,6 @@ async function tick() {
   } catch (e) {
     console.error("Konnte Daten nicht laden:", e);
   }
-  nextTickAt = Date.now() + POLL_INTERVAL_MS;
-}
-
-function updateCountdown() {
-  const remainingMs = Math.max(0, nextTickAt - Date.now());
-  const totalSec = Math.ceil(remainingMs / 1000);
-  const min = Math.floor(totalSec / 60);
-  const sec = totalSec % 60;
-  document.getElementById("countdown").textContent = `${min}:${String(sec).padStart(2, "0")}`;
 }
 
 // Beschriftet die Zeitraum-Buttons mit dem konkreten aktuellen Zeitraum statt
@@ -637,9 +2326,78 @@ function updateRangeButtonLabels() {
 }
 updateRangeButtonLabels();
 
+// Manueller Refresh (Nutzer-Feedback 20.08.2026): loest zuerst den Collector-Workflow
+// server-seitig ueber die Bridge aus (siehe triggerCollectorWorkflow() in Code.gs, der
+// GitHub-Token bleibt dabei ausschliesslich in Apps Script), wartet dann die geschaetzte
+// Laufzeit ab (Checkout + npm install + Playwright-Install + Scrape) und holt danach
+// automatisch den frischen Wert von der Bridge.
+document.getElementById("refreshBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("refreshBtn");
+  const label = document.getElementById("lastDataPointLabel");
+  btn.disabled = true;
+  btn.style.opacity = "0.4";
+  let triggered = false;
+  try {
+    triggered = await triggerCollector();
+  } catch (e) {
+    console.error("Konnte Collector nicht auslösen:", e);
+  }
+  if (triggered) {
+    const waitSec = 75; // grobe Schaetzung: Checkout+npm install+Playwright+Scrape
+    for (let remaining = waitSec; remaining > 0; remaining--) {
+      label.textContent = `Collector läuft… Aktualisierung in ${remaining}s`;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  } else {
+    label.textContent = "Collector konnte nicht gestartet werden – hole trotzdem aktuellsten Stand…";
+  }
+  await tick();
+  btn.disabled = false;
+  btn.style.opacity = "1";
+});
+
 tick();
 setInterval(tick, POLL_INTERVAL_MS);
-setInterval(updateCountdown, 1000);
+</script>
+<script>
+  /* Dezente Mausbindung fuer den lebendigen Hintergrund (Nutzer-Anforderung
+     21.08.2026, adaptiert von thorsten-schmidt.de). Der Fixed-Layer selbst wird
+     leicht verschoben, die einzelnen Blobs driften unabhaengig davon per CSS-
+     Keyframe weiter (siehe <style> oben) - laeuft also auch ohne Maus automatisch.
+     Nur Desktop mit Maus (kein Touch), respektiert prefers-reduced-motion. */
+  (function () {
+    var layer = document.querySelector(".ambient-bg");
+    if (!layer) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+
+    var STRENGTH = 26;
+    var EASE = 0.08;
+    var tx = 0, ty = 0, mx = 0, my = 0, raf = null;
+
+    function step() {
+      mx += (tx - mx) * EASE;
+      my += (ty - my) * EASE;
+      layer.style.transform = "translate(" + mx.toFixed(1) + "px," + my.toFixed(1) + "px)";
+      if (Math.abs(tx - mx) > 0.3 || Math.abs(ty - my) > 0.3) {
+        raf = requestAnimationFrame(step);
+      } else {
+        raf = null;
+      }
+    }
+
+    window.addEventListener(
+      "mousemove",
+      function (e) {
+        var nx = (e.clientX / window.innerWidth - 0.5) * 2;
+        var ny = (e.clientY / window.innerHeight - 0.5) * 2;
+        tx = nx * STRENGTH;
+        ty = ny * STRENGTH;
+        if (raf === null) raf = requestAnimationFrame(step);
+      },
+      { passive: true }
+    );
+  })();
 </script>
 </body>
 </html>
