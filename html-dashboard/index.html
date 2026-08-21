@@ -507,6 +507,12 @@ function fmtEur(n) { return `${deNumberFmt.format(Number(n ?? 0))} €`; }
 // Feedback 20.08.2026: "auch hier an den Tausender-Punkt denken").
 const deIntFmt = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 });
 function fmtThousands(n) { return deIntFmt.format(Math.round(n)); }
+// Ganzzahlige Varianten ohne Nachkommastellen fuer y-Achsen-Beschriftungen (Nutzer-
+// Feedback 21.08.2026: "die Kommas und Kommastellen in der y-Achse loeschen, das
+// nimmt zu viel Platz weg") - die grossen Zahlen/Karten behalten weiterhin 2
+// Nachkommastellen (fmtUsd/fmtEur), nur die Achsen-Ticks werden gerundet.
+function fmtUsdAxis(n) { return `${fmtThousands(n)} $`; }
+function fmtEurAxis(n) { return `${fmtThousands(n)} €`; }
 function fmtDateTime(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -569,11 +575,14 @@ function fmtPct(n) {
   return `${up ? "▲" : "▼"} ${Math.abs(n).toFixed(1)}% ggü. Vorwoche`;
 }
 
-// Konsequentes Farbschema "heiss/kalt": Orange = Anstieg, Blau = Rueckgang (passend
-// zu den Chart-Vergleichslinien Amber/Blau) - auf einen Blick erfassbar (Nutzer-
-// Feedback 19.08.2026).
-const TREND_UP_COLOR = "#FF8A1F";
-const TREND_DOWN_COLOR = "#3355FF";
+// Bugfix (21.08.2026, Nutzer-Feedback: "die Welle im Header ist bei Negativtrend
+// blau und bei Aufwaertstrend orange, das ist falsch"): das bisherige "heiss/kalt"-
+// Schema (Orange=Anstieg, Blau=Rueckgang, an die Chart-Vergleichslinien angelehnt,
+// siehe Nutzer-Feedback 19.08.2026) war inkonsistent mit dem Sparkline-Pfeil im
+// Header, der schon immer Gruen/Amber-Deep nutzte - jetzt ueberall einheitlich
+// Gruen = Anstieg, Amber-Deep (dunkles Orange-Rot) = Rueckgang.
+const TREND_UP_COLOR = "#3FBF6F";
+const TREND_DOWN_COLOR = "#B35A0A";
 
 // ISO-Wochenschluessel ("2025-W34") inkl. korrektem ISO-Wochenjahr (kann an
 // Jahresgrenzen vom Kalenderjahr abweichen) - fuer den exakten "gleiche KW,
@@ -865,7 +874,7 @@ function renderSparkline(weekly) {
   const firstAvg = avg(firstHalf);
   const secondAvg = avg(secondHalf);
   const up = secondAvg >= firstAvg;
-  const color = up ? "#3FBF6F" : "#B35A0A";
+  const color = up ? TREND_UP_COLOR : TREND_DOWN_COLOR;
   svg.innerHTML = `<polyline points="${coords.join(" ")}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`;
   const pct = firstAvg !== 0 ? ((secondAvg - firstAvg) / Math.abs(firstAvg)) * 100 : 0;
   arrowEl.textContent = `${up ? "▲" : "▼"} ${Math.abs(pct).toFixed(0)}% (8 Wo.)`;
@@ -1090,7 +1099,10 @@ function render(data) {
   const thisWeekEurEstimateEl = document.getElementById("thisWeekEurEstimate");
   thisWeekEurEstimateEl.textContent =
     data.fxRateUsdEur ? fmtEur(data.thisWeekUsdNet * data.fxRateUsdEur) : "—";
-  thisWeekEurEstimateEl.style.color = data.fxRateUsdEur ? TREND_UP_COLOR : "";
+  // Kein Trend, sondern reine Hervorhebung in der Marken-Akzentfarbe - deshalb bewusst
+  // NICHT TREND_UP_COLOR (die jetzt Gruen ist, siehe Bugfix 21.08.2026 oben), sonst
+  // wuerde diese Live-Schaetzung faelschlich gruen wie ein positiver Trend erscheinen.
+  thisWeekEurEstimateEl.style.color = data.fxRateUsdEur ? "#FF8A1F" : "";
 
   // Aktueller Gesamtwert (Startwert + reale Steigerung seit dem letzten Ablese-
   // zeitpunkt 11:59, KEINE Projektion) - Nutzer-Anforderung 20.08.2026 ("wo schreiben
@@ -1709,6 +1721,18 @@ const dailyAnchorLinePlugin = {
       ctx.lineTo(px, chartArea.bottom);
       ctx.stroke();
     });
+    // Kleine Uhrzeit-Beschriftung nur ueber der ERSTEN Linie (Nutzer-Feedback
+    // 21.08.2026: "über der 1. orangenen Linie muss klein in Orange 11:59 stehen").
+    if (opts?.label) {
+      const px = scales.x.getPixelForValue(positions[0]);
+      if (px >= chartArea.left && px <= chartArea.right) {
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#FF8A1F";
+        ctx.font = "10px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(opts.label, px, chartArea.top - 4);
+      }
+    }
     ctx.restore();
   },
 };
@@ -1851,6 +1875,7 @@ function updateChart(range) {
   let weeklyTimeAxis = false;
   let weeklyAnchorFraction = 0;
   let dailyAnchorLines = null;
+  let dailyAnchorLabel = null;
 
   if (range === "total") {
     // "Gesamt": voller Verlauf seit Beginn der Aufzeichnung, ohne Vergleichslinie.
@@ -1987,6 +2012,14 @@ function updateChart(range) {
       if (weeklyTimeAxis) {
         weeklyAnchorFraction = computeAnchorFraction(latestData.readoutTimeWeekly);
         dailyAnchorLines = labels.map((_, i) => i + weeklyAnchorFraction);
+        // Beschriftung nur ueber der ERSTEN Linie (Nutzer-Feedback 21.08.2026: "über
+        // der 1. orangenen Linie muss klein in Orange 11:59 stehen") - die Uhrzeit
+        // kommt live aus readoutTimeWeekly, passt sich also automatisch an, falls sich
+        // der woechentliche Ablesezeitpunkt einmal verschiebt ("wöchentlich natürlich
+        // angepasst").
+        dailyAnchorLabel = latestData.readoutTimeWeekly
+          ? new Date(latestData.readoutTimeWeekly).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })
+          : null;
       }
       const toXY = (arr) => arr.map((v, i) => ({ x: i + weeklyAnchorFraction, y: v === null || v === undefined ? null : v }));
       // Aktuelle Periode = Amber (durchgezogen, dick), Vorperiode = klares Blau
@@ -2084,7 +2117,7 @@ function updateChart(range) {
   // zeigen den USD-Zaehler (GesamtwertUSD, siehe buildDayCompare/buildWeekCompare/
   // buildMonthCompare), Jahr/Gesamt die EUR-Auszahlungswerte (buildYearCompare/
   // history.weekly.eur) - daher zwei unterschiedliche Einheiten statt einer fixen.
-  const chartUnitFmt = range === "yearly" || range === "total" ? fmtEur : fmtUsd;
+  const chartUnitFmt = range === "yearly" || range === "total" ? fmtEurAxis : fmtUsdAxis;
 
   if (chart) chart.destroy();
   // X-Achse: normalerweise Kategorie-Achse (ein Slot pro Label), in der Wochenansicht
@@ -2114,7 +2147,7 @@ function updateChart(range) {
     options: {
       plugins: {
         legend: { display: datasets.length > 1 },
-        dailyAnchorLine: { positions: dailyAnchorLines },
+        dailyAnchorLine: { positions: dailyAnchorLines, label: dailyAnchorLabel },
         // Saisonale Hinweise + Ferien-/Branchennews-Info-Punkte als Tooltip-
         // Zusatzzeile(n) bei markierten Punkten in der "Gesamt"-Ansicht (Nutzer-
         // Feedback 19./20.08.2026).
