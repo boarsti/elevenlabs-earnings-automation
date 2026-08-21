@@ -216,10 +216,9 @@
         <p class="text-xs muted mb-0.5 font-medium text-center">Diese Woche</p>
         <p id="thisWeekUsd" class="text-3xl font-display font-black font-num text-center text-amber">0,00 $</p>
         <div class="mt-2"></div>
-        <div class="info-row text-xs font-num mt-0.5">
-          <span class="info-label muted" title="Wert aus der Vorwoche zum exakt gleichen relativen Zeitpunkt (gleiche Anzahl Tage seit Wochenstart)">Vorwoche gleicher Zeitraum:</span>
-          <span id="thisWeekUsdPrev" class="info-value muted">&nbsp;</span>
-        </div>
+        <!-- Reihenfolge nach Nutzer-Anforderung 21.08.2026: "bis jetzt ca." + "aktuell
+             gesamt" nach oben, "Vorwoche gleicher Zeitraum" an 3. Stelle, "Rekord Woche"
+             ganz unten. -->
         <div class="info-row text-xs font-num mt-0.5">
           <span class="info-label muted">bis jetzt ca.</span>
           <span id="thisWeekEurEstimate" class="info-value muted">&nbsp;</span>
@@ -229,12 +228,16 @@
           <span id="currentTotalValue" class="info-value muted">&nbsp;</span>
         </div>
         <div class="info-row text-xs font-num mt-0.5">
-          <span class="info-label muted">Rekord Woche</span>
-          <span id="bestWeekRecord" class="info-value muted">&nbsp;</span>
+          <span class="info-label muted" title="Wert aus der Vorwoche zum exakt gleichen relativen Zeitpunkt (gleiche Anzahl Tage seit Wochenstart)">Vorwoche gleicher Zeitraum:</span>
+          <span id="thisWeekUsdPrev" class="info-value muted">&nbsp;</span>
         </div>
         <div class="info-row text-xs font-num mt-0.5">
           <span id="weekProjectionLabel" class="info-label muted">&nbsp;</span>
           <span id="weekProjection" class="info-value muted">&nbsp;</span>
+        </div>
+        <div class="info-row text-xs font-num mt-0.5">
+          <span class="info-label muted">Rekord Woche</span>
+          <span id="bestWeekRecord" class="info-value muted">&nbsp;</span>
         </div>
       </div>
       <div class="card p-3">
