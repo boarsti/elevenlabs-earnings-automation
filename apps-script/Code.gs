@@ -281,11 +281,45 @@ function computeWeekOverWeek(daily, weeklySorted, todayIso) {
     }
     return null;
   }
+  // Fallback (21.08.2026, Nutzer-Feedback: "Vorwoche gleicher Zeitraum" blieb leer,
+  // obwohl die Rohdaten laengst da sind - behebe das"): sowohl WochenumsatzUSD als
+  // auch TagesumsatzUSD sind fuer Wochen vor dem 18.08.2026 in der Sheet-Zelle leer
+  // (der Anfangsguthaben-Anker war da noch nicht zuverlaessig gesetzt) - GesamtwertUSD
+  // (der rohe, durchgehende Zaehlerstand) ist dagegen fuer den gesamten Zeitraum
+  // vorhanden. Rekonstruiert den Wochenumsatz deshalb direkt aus dem Zaehler: sucht
+  // den echten Reset-Tag (an dem GesamtwertUSD gegenueber dem Vortag tatsaechlich
+  // SINKT) in einem kleinen Fenster um den nominellen WeeklyHistory-Zeitstempel - der
+  // kann durch Collector-Lauf-Timing bis zu 1 Tag danebenliegen (beobachtet: Zeitstempel
+  // 10.08., echter Reset in den Rohdaten aber erst am 11.08.) - und zaehlt von dort
+  // "offsetDays" Tage weiter, identisch zur Zaehlweise der aktuellen (sauber
+  // verankerten) Woche.
+  function reconstructWeekCumulative(nominalWeekStartIso, offsetDays) {
+    const sortedDaily = daily.filter((r) => r.Datum).sort((a, b) => (a.Datum < b.Datum ? -1 : 1));
+    let resetIdx = -1;
+    for (let d = -1; d <= 2 && resetIdx < 0; d++) {
+      const candidateIso = addDaysIso(nominalWeekStartIso, d);
+      const idx = sortedDaily.findIndex((r) => r.Datum === candidateIso);
+      if (idx > 0 && Number(sortedDaily[idx].GesamtwertUSD || 0) < Number(sortedDaily[idx - 1].GesamtwertUSD || 0)) {
+        resetIdx = idx;
+      }
+    }
+    if (resetIdx < 0) return null;
+    const targetIdx = resetIdx + offsetDays;
+    if (targetIdx < resetIdx || targetIdx >= sortedDaily.length) return null;
+    const baselineVal = Number(sortedDaily[resetIdx].GesamtwertUSD || 0);
+    const targetVal = Number(sortedDaily[targetIdx].GesamtwertUSD || 0);
+    const delta = targetVal - baselineVal;
+    return delta >= 0 ? delta : null;
+  }
   const lastRow = findValidRow(lastWeekSameOffsetDate);
+  let lastVal = lastRow ? Number(lastRow.WochenumsatzUSD || 0) : 0;
+  if (!lastRow || lastVal === 0) {
+    const reconstructed = reconstructWeekCumulative(lastWeekStart, daysElapsed);
+    if (reconstructed === null || reconstructed <= 0) return null;
+    lastVal = reconstructed;
+  }
   const thisRow = daily.find((r) => r.Datum === todayIso);
   const thisVal = Number(thisRow?.WochenumsatzUSD || 0);
-  const lastVal = Number(lastRow?.WochenumsatzUSD || 0);
-  if (!lastRow || lastVal === 0) return null;
   return {
     pct: round2(((thisVal - lastVal) / lastVal) * 100),
     lastWeekUsd: round2(lastVal),
