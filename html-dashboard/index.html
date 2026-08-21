@@ -1561,27 +1561,45 @@ function buildMonthlyBars(data, offset = 0) {
 
 // Balkendiagramm "Wochenerlöse" fuer die "Woche"-Ansicht (Nutzer-Feedback
 // 20.08.2026: das bisherige Tagesumsatz-Balkendiagramm zieht in die "Tag"-Ansicht
-// um, hier stattdessen echte Wochensummen). Letzte 12 Kalenderwochen (Montag-
-// verankert wie isoWeekKey), Summe der echten Tagesumsaetze je Woche - analog zu
-// buildMonthlyBars, nur auf Wochenebene statt Monatsebene.
+// um, hier stattdessen echte Wochensummen).
+// Bugfix (21.08.2026, Nutzer-Feedback: "stimmen die Werte? ... das müssten ja die
+// Dollar-Abrechnungswerte zu den jeweiligen Stichtagen sein" - Antwort: nein, der
+// letzte Balken zeigte 179,95 $ statt der korrekten 138,95 $ aus Feld2, weil er nach
+// Kalenderwoche [Mo-So] gruppierte statt nach der echten Abrechnungswoche [11:59-
+// Rollover] - der Montag vor dem Rollover gehoerte noch zur ALTEN Woche, wurde aber
+// in die neue Kalenderwoche einsortiert): Gruppierung jetzt wie in buildWeekCompare()
+// anhand der echten Wochenanker (isWeekAnchor-Flag + WeeklyHistory-Zeitstempel als
+// Fallback fuer aeltere Wochen ohne verlaesslichen Anker), nicht mehr isoWeekKey().
 // offset (Nutzer-Feedback 20.08.2026: "Pfeile zum Durchblaettern der Historie") -
 // verschiebt das 12-Wochen-Fenster um "offset" Wochen in die Vergangenheit, 0 =
 // aktuelles Fenster (Standard).
 function buildWeeklyBars(data, offset = 0) {
   const daily = data.history?.daily ?? [];
   if (!daily.length) return null;
-  const byWeekTotal = {};
-  daily.forEach((d) => {
-    if (d.tagesumsatzUsd === null || d.tagesumsatzUsd === undefined) return;
-    const wk = isoWeekKey(d.date);
-    byWeekTotal[wk] = (byWeekTotal[wk] || 0) + d.tagesumsatzUsd;
+  const sorted = [...daily].sort((a, b) => (a.date < b.date ? -1 : 1));
+  const weeklyHistory = data.history?.weekly ?? [];
+  const anchorDateSet = new Set(
+    weeklyHistory
+      .map((w) => w.weekStart)
+      .filter(Boolean)
+      .map((iso) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "Europe/Berlin" }))
+  );
+  sorted.forEach((r) => { if (r.isWeekAnchor) anchorDateSet.add(r.date); });
+  const anchorIdx = [...anchorDateSet]
+    .sort()
+    .map((dateStr) => sorted.findIndex((r) => r.date === dateStr))
+    .filter((i) => i >= 0);
+  if (!anchorIdx.length) return null;
+  const segments = anchorIdx.map((start, i) => {
+    const segEnd = i + 1 < anchorIdx.length ? anchorIdx[i + 1] : sorted.length;
+    return sorted.slice(start, segEnd);
   });
-  const allWeekKeys = Object.keys(byWeekTotal).sort();
-  const end = allWeekKeys.length - offset;
-  const weekKeys = allWeekKeys.slice(Math.max(0, end - 12), end);
-  if (!weekKeys.length) return null;
-  const labels = weekKeys.map((wk) => `KW${isoWeekNumber(new Date(wk + "T00:00:00Z"))}`);
-  const values = weekKeys.map((wk) => byWeekTotal[wk]);
+  const end = segments.length - offset;
+  const windowSegs = segments.slice(Math.max(0, end - 12), end);
+  if (!windowSegs.length) return null;
+  const labels = windowSegs.map((seg) => `KW${isoWeekNumber(new Date(seg[0].date + "T00:00:00Z"))}`);
+  const sumSeg = (seg) => seg.reduce((sum, r) => sum + (r.tagesumsatzUsd ?? 0), 0);
+  const values = windowSegs.map(sumSeg);
 
   // Prognose fuer die laufende (noch nicht abgeschlossene) Woche als transparenter
   // Balken-Aufsatz, analog zur Jahresansicht (Nutzer-Feedback 20.08.2026: "im
@@ -1593,9 +1611,9 @@ function buildWeeklyBars(data, offset = 0) {
   if (offset === 0) {
     const projection = computeWeekProjection(data);
     if (projection !== null) {
-      const lastIdx = weekKeys.length - 1;
-      projectionRemainder = weekKeys.map((wk, i) =>
-        i === lastIdx ? Math.max(0, projection - (byWeekTotal[wk] || 0)) : null
+      const lastIdx = windowSegs.length - 1;
+      projectionRemainder = windowSegs.map((seg, i) =>
+        i === lastIdx ? Math.max(0, projection - sumSeg(seg)) : null
       );
     }
   }
