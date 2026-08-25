@@ -13,22 +13,27 @@
 //     Time,voice_id,voice_name,<Earnings|Characters> - eine Zeile pro Tag pro Stimme.
 //     Das ist die einzige gefundene Quelle mit taggenauer Pro-Stimme-Aufschluesselung;
 //     keine oeffentliche API dafuer vorhanden.
-//   - Granularitaet schaltet automatisch um: bei kurzen Zeitraeumen (<= ~35 Tage)
-//     "Day", bei sehr langen automatisch "Weekly" - deshalb bewusst ein kurzes
-//     rollierendes Fenster ("Last 30 days") statt eines langen Zeitraums anfragen,
-//     damit Tagesgranularitaet erhalten bleibt (Upsert baut die Historie mit jedem
-//     taeglichen Lauf inkrementell weiter aus, siehe collectVoiceEarnings.js).
+//   - Granularitaet-Dropdown des CHARTS schaltet zwar bei langen Zeitraeumen auf
+//     "Weekly" um - der CSV-EXPORT bleibt davon aber unberuehrt und liefert weiterhin
+//     eine Zeile pro Tag pro Stimme (verifiziert 25.08.2026 per "Last 3 years": 493
+//     Zeilen mit echten Tagesdaten von 2025-01-30 bis heute, keine Wochen-Buckets).
+//     Der frueher hier dokumentierte gegenteilige Verdacht war falsch - "Last 3 years"
+//     ist daher fuer ein einmaliges Backfill sicher nutzbar, siehe range-Parameter.
 //   - Ein Promo-Popup ("Platform switch has moved") kann kurzzeitig ueber dem
 //     Export-Button liegen und Klicks abfangen - wird defensiv aus dem DOM entfernt.
 
 const ANALYTICS_URL = "https://elevenlabs.io/app/voices-earnings/analytics";
+const RANGE_LABELS = { "30d": "Last 30 days", "3y": "Last 3 years" };
 
-export async function readVoiceEarnings(page) {
+// range: "30d" (Standard, taeglicher Lauf - rollierendes Fenster, upsert baut Historie
+// inkrementell aus) oder "3y" (einmaliges Backfill - deckt die komplette bisher
+// verfuegbare Kontohistorie ab, siehe collectVoiceEarnings.js VOICE_EARNINGS_RANGE).
+export async function readVoiceEarnings(page, { range = "30d" } = {}) {
   await page.goto(ANALYTICS_URL, { waitUntil: "domcontentloaded" });
   await page.getByText("Total Earnings", { exact: true }).waitFor({ timeout: 30_000 });
   await page.waitForTimeout(1000);
 
-  await setDateRangeLast30Days(page);
+  await setDateRange(page, range);
 
   const earningsRows = await exportTabAsRows(page, "earnings_tab", "Earnings");
   const characterRows = await exportTabAsRows(page, "character_usage_tab", "Characters");
@@ -36,11 +41,13 @@ export async function readVoiceEarnings(page) {
   return mergeByDateAndVoice(earningsRows, characterRows);
 }
 
-async function setDateRangeLast30Days(page) {
+async function setDateRange(page, range) {
+  const label = RANGE_LABELS[range];
+  if (!label) throw new Error(`Unbekannter Zeitraum "${range}" - erwartet: ${Object.keys(RANGE_LABELS).join(", ")}`);
   // Label ist z.B. "Last 7 days · UTC+2" als EIN Textknoten - ohne exact:true suchen.
   await page.getByText("Last 7 days").click();
   await page.waitForTimeout(200);
-  await page.getByText("Last 30 days", { exact: true }).click();
+  await page.getByText(label, { exact: true }).click();
   await page.waitForTimeout(500);
 }
 

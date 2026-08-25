@@ -20,6 +20,11 @@ import {
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 const STORAGE_STATE_JSON = process.env.ELEVENLABS_STORAGE_STATE;
+// "30d" (Standard, taeglicher Cron-Lauf) oder "3y" (einmaliges Backfill der kompletten
+// bisher verfuegbaren Kontohistorie - Nutzer-Anforderung 25.08.2026: "es fehlen aber
+// eine Menge Monate. hole nach"). Wird ueber den workflow_dispatch-Input "range" in
+// .github/workflows/collect-voice-earnings.yml gesetzt, Default bleibt "30d".
+const RANGE = process.env.VOICE_EARNINGS_RANGE || "30d";
 
 async function main() {
   if (!SPREADSHEET_ID) throw new Error("SPREADSHEET_ID ist nicht gesetzt.");
@@ -35,7 +40,7 @@ async function main() {
 
   let fresh;
   try {
-    fresh = await readVoiceEarnings(page); // rollierendes 30-Tage-Fenster, taggenau
+    fresh = await readVoiceEarnings(page, { range: RANGE });
   } finally {
     await browser.close();
   }

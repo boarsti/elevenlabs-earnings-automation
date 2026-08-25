@@ -7,7 +7,16 @@ on:
     # Winter (UTC+1) 22:15 Uhr lokal, im Sommer (UTC+2) 23:15 Uhr lokal - so bleibt
     # es in BEIDEN Faellen "nach 22 Uhr", nie davor.
     - cron: "15 21 * * *"
-  workflow_dispatch: {} # manueller Start zum Testen ueber den "Actions"-Tab
+  workflow_dispatch: # manueller Start ueber den "Actions"-Tab, z.B. fuers Backfill
+    inputs:
+      range:
+        description: "Zeitraum: 30d (normaler Tageslauf) oder 3y (einmaliges Backfill der kompletten Kontohistorie)"
+        required: false
+        default: "30d"
+        type: choice
+        options:
+          - "30d"
+          - "3y"
 
 jobs:
   collect:
@@ -37,4 +46,5 @@ jobs:
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
           ELEVENLABS_STORAGE_STATE: ${{ secrets.ELEVENLABS_STORAGE_STATE }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          VOICE_EARNINGS_RANGE: ${{ inputs.range || '30d' }}
         run: npm run collect-voice-earnings
