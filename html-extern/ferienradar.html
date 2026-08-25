@@ -1,0 +1,1472 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ferienradar</title>
+<!-- Favicon fehlte hier komplett (Nutzer-Feedback 25.08.2026: "kein Favicon in
+     Safari") - diese Datei ist eine externe Kopie des Claude-Artifact-Inhalts
+     (dort wird das Favicon vom Artifact-Wrapper anhand des favicon-Parameters
+     "🏖️" injiziert, was fuer eine selbst gehostete statische Datei nicht gilt).
+     SVG-Data-URI-Favicon statt PNG, da ohne Build-Schritt am einfachsten zu
+     pflegen - von aktuellem Safari (16.4+) unterstuetzt. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%96%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800;900&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Farb-/Font-Tokens 1:1 aus dem Design-System von Projekt "001 KI Telefon Audio
+     Generator" / dem ElevenLabs-Dashboard uebernommen (ink/ink2/amber/brand/success/
+     paper, Archivo+Inter+IBM Plex Mono) - Nutzer-Anforderung 25.08.2026, damit das
+     Ferienradar sich wie ein Geschwister-Tool des Dashboards anfuehlt statt wie ein
+     fremdes Werkzeug. */
+  :root {
+    color-scheme: light;
+    --bg: #F5F6FA;
+    --surface: #ffffff;
+    --surface-2: #eef0f8;
+    --text-primary: #10173A;
+    --text-secondary: #3c4266;
+    --text-muted: #5b6178;
+    --gridline: rgba(16,23,58,0.08);
+    --baseline: rgba(16,23,58,0.18);
+    --border: rgba(16,23,58,0.10);
+    --accent: #FF8A1F;
+    --accent-strong: #B35A0A;
+    --accent-wash: rgba(255,138,31,0.12);
+    --accent-wash-strong: rgba(255,138,31,0.24);
+    --brand: #3355FF;
+    --success: #3FBF6F;
+    --today-line: #10173A;
+    --shadow: 0 1px 2px rgba(16,23,58,0.05), 0 8px 24px -12px rgba(16,23,58,0.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0b0f2b;
+      --surface: #182055;
+      --surface-2: #1F2A66;
+      --text-primary: #f1f2fa;
+      --text-secondary: #c3c7e6;
+      --text-muted: #9aa0c7;
+      --gridline: rgba(255,255,255,0.08);
+      --baseline: rgba(255,255,255,0.20);
+      --border: rgba(255,255,255,0.10);
+      --accent: #FF8A1F;
+      --accent-strong: #ffab5c;
+      --accent-wash: rgba(255,138,31,0.16);
+      --accent-wash-strong: rgba(255,138,31,0.30);
+      --brand: #6f85ff;
+      --success: #3FBF6F;
+      --today-line: #f1f2fa;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0b0f2b;
+    --surface: #182055;
+    --surface-2: #1F2A66;
+    --text-primary: #f1f2fa;
+    --text-secondary: #c3c7e6;
+    --text-muted: #9aa0c7;
+    --gridline: rgba(255,255,255,0.08);
+    --baseline: rgba(255,255,255,0.20);
+    --border: rgba(255,255,255,0.10);
+    --accent: #FF8A1F;
+    --accent-strong: #ffab5c;
+    --accent-wash: rgba(255,138,31,0.16);
+    --accent-wash-strong: rgba(255,138,31,0.30);
+    --brand: #6f85ff;
+    --success: #3FBF6F;
+    --today-line: #f1f2fa;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .num { font-family: "IBM Plex Mono", ui-monospace, "SF Mono", monospace; }
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 40px 24px 64px;
+  }
+
+  /* ---------- Header ---------- */
+  header.top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin-bottom: 28px;
+  }
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent-strong);
+    font-weight: 600;
+    margin: 0 0 8px;
+  }
+  h1 {
+    font-family: "Archivo", "Inter", sans-serif;
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+    text-wrap: balance;
+  }
+  .subtitle {
+    color: var(--text-secondary);
+    font-size: 14.5px;
+    max-width: 56ch;
+    line-height: 1.5;
+    margin: 0;
+  }
+  .asof {
+    text-align: right;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .asof .num { color: var(--text-secondary); }
+
+  /* ---------- Hero stat row ---------- */
+  .hero-row {
+    display: grid;
+    grid-template-columns: 1.1fr 1.1fr 1.4fr;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  .hero-cell {
+    background: var(--surface);
+    padding: 18px 20px;
+  }
+  .hero-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 0 0 10px;
+    font-weight: 500;
+  }
+  .hero-value-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .hero-value {
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .hero-of {
+    font-size: 14px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--accent-wash);
+    color: var(--text-primary);
+    border: 1px solid var(--accent-wash-strong);
+    border-radius: 999px;
+    padding: 3px 9px 3px 7px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: default;
+  }
+  .chip .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--accent); flex: none; }
+  .chip-empty { color: var(--text-muted); font-size: 12.5px; }
+  .hero-cell.note {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+  }
+  .hero-cell.note p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.55;
+  }
+  .hero-cell.note strong { color: var(--text-primary); font-weight: 600; }
+
+  /* ---------- Tabs ---------- */
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+  .tab {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 13px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .tab:hover { background: var(--surface-2); }
+  .tab.active {
+    background: var(--accent);
+    color: #fff;
+  }
+  .aw-state-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .aw-state-toggle-all {
+    font-family: inherit; font-size: 11px; font-weight: 500;
+    color: var(--text-muted); background: transparent; border: 1px solid var(--border);
+    border-radius: 999px; padding: 3px 10px; cursor: pointer;
+  }
+  .aw-state-toggle-all:hover { color: var(--text-primary); border-color: var(--text-muted); }
+  .aw-state-sep { width: 1px; height: 16px; background: var(--border); }
+  .aw-state-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .aw-state-chip {
+    font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600;
+    padding: 3px 8px; border-radius: 6px; cursor: pointer; user-select: none;
+    border: 1px solid var(--border); color: var(--text-muted); background: var(--surface-2);
+    transition: background .1s, color .1s, border-color .1s;
+  }
+  .aw-state-chip.on { background: var(--accent-wash-strong); color: var(--text-primary); border-color: var(--accent); }
+  .aw-state-chip:hover { border-color: var(--accent); }
+  /* Hover-Sync (Nutzer-Anforderung 25.08.2026, "gleiches oben wie unten"): eigener
+     Ring statt Hintergrundfarbe, damit es sich klar von der Auswahl-Markierung (.on,
+     Amber) unterscheidet - beide Zustaende (ausgewaehlt + gerade betroffen) bleiben
+     gleichzeitig erkennbar. */
+  .aw-state-chip.hover-sync { box-shadow: 0 0 0 2px var(--brand) inset; color: var(--brand); }
+
+  /* ---------- Chart card ---------- */
+  .chart-card {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 20px 12px;
+    box-shadow: var(--shadow);
+    margin-bottom: 22px;
+  }
+  .chart-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 4px;
+  }
+  .chart-title { font-size: 14px; font-weight: 600; margin: 0; }
+  .chart-sub { font-size: 12px; color: var(--text-muted); margin: 0 0 6px; }
+  .area-wrap { position: relative; }
+  .area-wrap svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+  .heatmap-wrap { margin-top: 4px; }
+  .hm-row {
+    display: grid;
+    grid-template-columns: 128px 1fr;
+    align-items: center;
+    height: 24px;
+    gap: 10px;
+  }
+  .hm-row + .hm-row { border-top: 1px solid var(--gridline); }
+  .hm-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .hm-label .live-dot {
+    width: 6px; height: 6px; border-radius: 999px;
+    background: var(--gridline);
+    flex: none;
+  }
+  .hm-label .live-dot.on { background: var(--accent); }
+  .hm-label .code { font-family: "IBM Plex Mono", monospace; font-weight: 600; color: var(--text-primary); font-size: 11.5px; width: 24px; flex: none; }
+  .hm-label .full { color: var(--text-muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+  .hm-track { position: relative; height: 14px; }
+  .hm-block {
+    position: absolute;
+    top: 0; height: 14px;
+    min-width: 2px;
+    background: var(--accent);
+    border-radius: 3px;
+    cursor: default;
+  }
+  .hm-block:hover { background: var(--accent-strong); }
+  /* "click-blue" Hover-Sync (Nutzer-Anforderung 25.08.2026): beim Hovern ueber das
+     Chart leuchten die an dieser x-Position betroffenen Balken + Laenderkuerzel in
+     --brand statt --accent auf, damit sofort ersichtlich ist, WELCHE Laender an der
+     Mausposition gerade Ferien haben - synchron zum Tooltip. */
+  .hm-block.hover-sync { background: var(--brand); }
+  .hm-row.hover-sync .code { color: var(--brand); }
+
+  /* ---------- Werbezeitraum-Maske ---------- */
+  .aw-controls {
+    display: flex;
+    align-items: flex-end;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .aw-field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--text-muted); font-weight: 500; }
+  .aw-field input[type="date"] {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13px;
+    color: var(--text-primary);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 10px;
+    color-scheme: light dark;
+  }
+  .aw-field input[type="date"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .aw-verdict {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 7px 13px;
+    border-radius: 999px;
+  }
+  .aw-verdict .aw-dot { width: 8px; height: 8px; border-radius: 999px; flex: none; }
+  .aw-verdict.good { background: rgba(63,191,111,0.14); color: var(--success); }
+  .aw-verdict.good .aw-dot { background: var(--success); }
+  .aw-verdict.mixed { background: rgba(51,85,255,0.12); color: var(--brand); }
+  .aw-verdict.mixed .aw-dot { background: var(--brand); }
+  .aw-verdict.high { background: var(--accent-wash-strong); color: var(--accent-strong); }
+  .aw-verdict.high .aw-dot { background: var(--accent-strong); }
+
+  .aw-stat-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .aw-stat { background: var(--surface-2); border-radius: 10px; padding: 12px 14px; }
+  .aw-stat-label { font-size: 11px; color: var(--text-muted); font-weight: 500; margin: 0 0 4px; }
+  .aw-stat-value { font-family: "IBM Plex Mono", monospace; font-size: 20px; font-weight: 600; color: var(--text-primary); }
+  .aw-stat-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .aw-dist-bar {
+    display: flex;
+    height: 8px;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 8px;
+    background: var(--gridline);
+  }
+  .aw-dist-bar span { height: 100%; }
+  .aw-dist-bar .seg-low { background: var(--success); }
+  .aw-dist-bar .seg-mid { background: var(--brand); }
+  .aw-dist-bar .seg-high { background: var(--accent-strong); }
+
+  .axis-row {
+    display: grid;
+    grid-template-columns: 128px 1fr;
+    gap: 10px;
+    margin: 0 0 8px;
+  }
+  .axis-track { position: relative; height: 20px; border-top: 1px solid var(--baseline); }
+  .axis-tick {
+    position: absolute;
+    top: 0;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10.5px;
+    color: var(--text-muted);
+    transform: translateX(-50%);
+    white-space: nowrap;
+    padding-top: 5px;
+  }
+  .axis-tick::before {
+    content: "";
+    position: absolute;
+    top: -1px;
+    left: 50%;
+    width: 1px;
+    height: 4px;
+    background: var(--baseline);
+  }
+
+  /* today marker spans both charts via a shared overlay */
+  .today-col { grid-column: 2; position: relative; }
+
+  /* ---------- Tooltip ---------- */
+  .viz-tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--text-primary);
+    color: var(--bg);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    line-height: 1.5;
+    box-shadow: var(--shadow);
+    z-index: 20;
+    opacity: 0;
+    transition: opacity 0.08s;
+    max-width: 260px;
+  }
+  .viz-tooltip.show { opacity: 1; }
+  .viz-tooltip .tt-date { font-weight: 600; margin-bottom: 3px; }
+  .viz-tooltip .tt-value { font-family: "IBM Plex Mono", monospace; font-weight: 600; }
+  .viz-tooltip .tt-states { color: var(--text-muted); margin-top: 2px; }
+  :root:not([data-theme="dark"]) .viz-tooltip { color: var(--surface); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .viz-tooltip { color: var(--bg); }
+  }
+
+
+  footer {
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.7;
+    max-width: 74ch;
+  }
+  footer a { color: var(--text-secondary); }
+  footer p { margin: 0 0 8px; }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <header class="top">
+    <div>
+      <p class="eyebrow">Bundesweite Ferienabdeckung</p>
+      <h1>Ferienradar</h1>
+      <p class="subtitle">Wie viele der 16 Bundesländer haben an einem gegebenen Tag gleichzeitig Schulferien — als Näherung für bundesweite „Verfügbarkeit" einer ferienabhängigen Zielgruppe.</p>
+    </div>
+    <div class="asof">
+      Termine: offizielle KMK-Ferienkalender<br>
+      <span class="num" id="genDate"></span>
+    </div>
+  </header>
+
+  <div class="hero-row">
+    <div class="hero-cell">
+      <p class="hero-label">Heute<span class="num" id="todayDateLabel"></span></p>
+      <div class="hero-value-row">
+        <span class="hero-value num" id="todayCount">–</span>
+        <span class="hero-of">von 16 Bundesländern <span class="num" id="todayPopPct"></span></span>
+      </div>
+      <div class="chip-row" id="todayChips"></div>
+    </div>
+    <div class="hero-cell">
+      <p class="hero-label">In 7 Tagen<span class="num" id="nextWeekDateLabel"></span></p>
+      <div class="hero-value-row">
+        <span class="hero-value num" id="nextWeekCount">–</span>
+        <span class="hero-of">von 16 Bundesländern <span class="num" id="nextWeekPopPct"></span></span>
+      </div>
+      <div class="chip-row" id="nextWeekChips"></div>
+    </div>
+    <div class="hero-cell note">
+      <p><strong>Wozu:</strong> ein großer Teil der Zielgruppe (Schüler, Eltern) ist ferienabhängig verfügbar/aktiv. Diese Kurve ist ein möglicher erklärender Faktor für Schwankungen in der Erlöskurve.</p>
+      <p id="soonestEnd"></p>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="tabs" id="tabs"></div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-title-row">
+      <p class="chart-title">Anzahl Bundesländer gleichzeitig in Schulferien</p>
+      <p class="chart-sub" id="rangeLabel"></p>
+    </div>
+    <div class="area-wrap">
+      <svg id="areaSvg" viewBox="0 0 1200 300" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="axis-row"><div></div><div class="axis-track" id="axisTicks"></div></div>
+
+    <div class="heatmap-wrap" id="heatmap"></div>
+
+    <div class="viz-tooltip" id="tooltip"></div>
+  </div>
+
+  <div class="chart-card" id="adWindowCard">
+    <div class="chart-title-row">
+      <p class="chart-title">Werbezeitraum prüfen</p>
+      <p class="chart-sub">Ferienabdeckung für einen frei wählbaren Zeitraum</p>
+    </div>
+    <div class="aw-controls">
+      <label class="aw-field">Von<input type="date" id="awFrom"></label>
+      <label class="aw-field">Bis<input type="date" id="awTo"></label>
+      <span class="aw-verdict" id="awVerdict"><span class="aw-dot"></span><span id="awVerdictText"></span></span>
+    </div>
+    <div class="aw-state-row">
+      <button type="button" class="aw-state-toggle-all" id="awStateAll">Alle</button>
+      <button type="button" class="aw-state-toggle-all" id="awStateNone">Keine</button>
+      <span class="aw-state-sep"></span>
+      <div id="awStateChips" class="aw-state-chips"></div>
+    </div>
+    <div class="aw-stat-row">
+      <div class="aw-stat">
+        <p class="aw-stat-label">Zeitraum</p>
+        <p class="aw-stat-value" id="awDays">–</p>
+        <p class="aw-stat-sub" id="awDaysSub"></p>
+      </div>
+      <div class="aw-stat">
+        <p class="aw-stat-label">Ø Bundesländer gleichzeitig in Ferien</p>
+        <p class="aw-stat-value" id="awAvg">–</p>
+        <p class="aw-stat-sub"><span id="awAvgSub">von 16</span> · <span id="awPopSub" class="num"></span></p>
+      </div>
+      <div class="aw-stat">
+        <p class="aw-stat-label">Tage-Verteilung</p>
+        <p class="aw-stat-sub" id="awDistLabel" style="margin-top:0;">–</p>
+        <div class="aw-dist-bar" id="awDistBar"></div>
+      </div>
+    </div>
+    <div class="area-wrap">
+      <svg id="awSvg" viewBox="0 0 1200 160" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="axis-row"><div></div><div class="axis-track" id="awAxisTicks"></div></div>
+    <div class="viz-tooltip" id="awTooltip"></div>
+  </div>
+
+  <footer>
+    <p><strong>Quelle:</strong> Kultusministerkonferenz (kmk.org), offizielle Ferienkalender-PDFs für die Schuljahre 2024/25–2026/27. Einzelne bewegliche Ferientage (Brückentage, Randtage) sind als eigene Tageseinträge gezählt, damit die Tageszählung exakt bleibt; diese können je nach Schulaufsichtsbezirk innerhalb eines Landes geringfügig abweichen.</p>
+    <p>Zeitraum abdeckt: 01.01.2025 – 10.09.2029. „Heute" wird bei jedem Seitenaufruf live aus dem aktuellen Datum berechnet, nicht beim Erstellen dieser Seite eingefroren.</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var STATE_NAMES = {
+    BW:"Baden-Württemberg", BY:"Bayern", BE:"Berlin", BB:"Brandenburg",
+    HB:"Bremen", HH:"Hamburg", HE:"Hessen", MV:"Mecklenburg-Vorpommern",
+    NI:"Niedersachsen", NW:"Nordrhein-Westfalen", RP:"Rheinland-Pfalz",
+    SL:"Saarland", SN:"Sachsen", ST:"Sachsen-Anhalt", SH:"Schleswig-Holstein",
+    TH:"Thüringen"
+  };
+  var STATE_ORDER = Object.keys(STATE_NAMES);
+
+  // Einwohnerzahlen je Bundesland (Stand 2022, per WebFetch am 25.08.2026 verifiziert -
+  // siehe html-dashboard/index.html fuer dieselben Werte + Quellenkommentar). Fuer die
+  // Bevoelkerungs-gewichtete Kennzahl ("~X% der Bevoelkerung in Ferien").
+  var STATE_POPULATION = {
+    BW: 11124642, BY: 13176989, BE: 3677472, BB: 2537868, HB: 676463,
+    HH: 1853935, HE: 6295017, MV: 1611160, NI: 8027031, NW: 17924591,
+    RP: 4106485, SL: 982348, SN: 4043002, ST: 2169253, SH: 2922005, TH: 2108863
+  };
+  var TOTAL_POPULATION = STATE_ORDER.reduce(function (s, c) { return s + STATE_POPULATION[c]; }, 0);
+
+  var PERIODS = [
+["BW","Weihnachtsferien","2024-12-23","2025-01-04"],["BW","Osterferien","2025-04-14","2025-04-26"],
+["BW","Pfingstferien","2025-06-10","2025-06-20"],["BW","Sommerferien","2025-07-31","2025-09-13"],
+["BW","Herbstferien","2025-10-27","2025-10-31"],["BW","Weihnachtsferien","2025-12-22","2026-01-05"],
+["BW","Osterferien","2026-03-30","2026-04-11"],["BW","Pfingstferien","2026-05-26","2026-06-05"],
+["BW","Sommerferien","2026-07-30","2026-09-12"],["BW","Herbstferien","2026-10-26","2026-10-31"],
+["BW","Weihnachtsferien","2026-12-23","2027-01-09"],["BW","Osterferien (Randtag)","2027-03-25","2027-03-25"],
+["BW","Osterferien","2027-03-30","2027-04-03"],["BW","Pfingstferien","2027-05-18","2027-05-29"],
+["BW","Sommerferien","2027-07-29","2027-09-11"],
+["BY","Weihnachtsferien","2024-12-23","2025-01-03"],["BY","Winterferien (Fasching)","2025-03-03","2025-03-07"],
+["BY","Osterferien","2025-04-14","2025-04-25"],["BY","Pfingstferien","2025-06-10","2025-06-20"],
+["BY","Sommerferien (Randtag)","2025-08-01","2025-08-01"],["BY","Sommerferien","2025-08-04","2025-09-15"],
+["BY","Herbstferien","2025-11-03","2025-11-07"],["BY","Weihnachtsferien","2025-12-22","2026-01-05"],
+["BY","Winterferien (Fasching)","2026-02-16","2026-02-20"],["BY","Osterferien","2026-03-30","2026-04-10"],
+["BY","Pfingstferien","2026-05-26","2026-06-05"],["BY","Sommerferien","2026-08-03","2026-09-14"],
+["BY","Herbstferien","2026-11-02","2026-11-06"],["BY","Weihnachtsferien","2026-12-24","2027-01-08"],
+["BY","Winterferien (Fasching)","2027-02-08","2027-02-12"],["BY","Osterferien","2027-03-22","2027-04-02"],
+["BY","Pfingstferien","2027-05-18","2027-05-28"],["BY","Sommerferien","2027-08-02","2027-09-13"],
+["BE","Weihnachtsferien","2024-12-23","2024-12-31"],["BE","Winterferien","2025-02-03","2025-02-08"],
+["BE","Osterferien","2025-04-14","2025-04-25"],["BE","Osterferien (Randtag)","2025-05-02","2025-05-02"],
+["BE","Herbstferien","2025-10-20","2025-11-01"],["BE","Weihnachtsferien","2025-12-22","2026-01-02"],
+["BE","Winterferien","2026-02-02","2026-02-07"],["BE","Osterferien","2026-03-30","2026-04-10"],
+["BE","Christi Himmelfahrt (Brückentag)","2026-05-15","2026-05-15"],["BE","Pfingstferien","2026-05-26","2026-05-26"],
+["BE","Sommerferien","2026-07-09","2026-08-22"],["BE","Herbstferien","2026-10-19","2026-10-31"],
+["BE","Weihnachtsferien","2026-12-23","2027-01-02"],["BE","Winterferien","2027-02-01","2027-02-06"],
+["BE","Osterferien","2027-03-22","2027-04-02"],["BE","Christi Himmelfahrt (Brückentag)","2027-05-07","2027-05-07"],
+["BE","Pfingstferien","2027-05-18","2027-05-19"],["BE","Sommerferien","2027-07-01","2027-08-14"],
+["BB","Weihnachtsferien","2024-12-23","2024-12-31"],["BB","Winterferien","2025-02-03","2025-02-08"],
+["BB","Osterferien","2025-04-14","2025-04-25"],["BB","Pfingstferien","2025-06-10","2025-06-10"],
+["BB","Herbstferien","2025-10-20","2025-11-01"],["BB","Weihnachtsferien","2025-12-22","2026-01-02"],
+["BB","Winterferien","2026-02-02","2026-02-07"],["BB","Osterferien","2026-03-30","2026-04-10"],
+["BB","Pfingstferien","2026-05-26","2026-05-26"],["BB","Sommerferien","2026-07-09","2026-08-22"],
+["BB","Herbstferien","2026-10-19","2026-10-30"],["BB","Weihnachtsferien","2026-12-23","2027-01-02"],
+["BB","Winterferien","2027-02-01","2027-02-06"],["BB","Osterferien","2027-03-22","2027-04-03"],
+["BB","Pfingstferien","2027-05-18","2027-05-18"],["BB","Sommerferien","2027-07-01","2027-08-14"],
+["HB","Weihnachtsferien","2024-12-23","2025-01-04"],["HB","Winterferien","2025-02-03","2025-02-04"],
+["HB","Osterferien","2025-04-07","2025-04-19"],["HB","Osterferien (Randtag)","2025-04-30","2025-04-30"],
+["HB","Osterferien (Randtag)","2025-05-02","2025-05-02"],["HB","Christi Himmelfahrt (Brückentag)","2025-05-30","2025-05-30"],
+["HB","Pfingstferien","2025-06-10","2025-06-10"],["HB","Sommerferien","2025-07-03","2025-08-13"],
+["HB","Herbstferien","2025-10-13","2025-10-25"],["HB","Weihnachtsferien","2025-12-22","2026-01-05"],
+["HB","Winterferien","2026-02-02","2026-02-03"],["HB","Osterferien","2026-03-23","2026-04-07"],
+["HB","Christi Himmelfahrt (Brückentag)","2026-05-15","2026-05-15"],["HB","Pfingstferien","2026-05-26","2026-05-26"],
+["HB","Sommerferien","2026-07-02","2026-08-12"],["HB","Herbstferien","2026-10-12","2026-10-24"],
+["HB","Weihnachtsferien","2026-12-23","2027-01-09"],["HB","Winterferien","2027-02-01","2027-02-02"],
+["HB","Osterferien","2027-03-22","2027-04-03"],["HB","Christi Himmelfahrt (Brückentag)","2027-05-07","2027-05-07"],
+["HB","Pfingstferien","2027-05-18","2027-05-18"],["HB","Sommerferien","2027-07-08","2027-08-18"],
+["HH","Weihnachtsferien","2024-12-20","2025-01-03"],["HH","Winterferien","2025-01-31","2025-01-31"],
+["HH","Osterferien","2025-03-10","2025-03-21"],["HH","Osterferien (Randtag)","2025-05-02","2025-05-02"],
+["HH","Pfingstferien","2025-05-26","2025-05-30"],["HH","Sommerferien","2025-07-24","2025-09-03"],
+["HH","Herbstferien","2025-10-20","2025-10-31"],["HH","Weihnachtsferien","2025-12-17","2026-01-02"],
+["HH","Winterferien","2026-01-30","2026-01-30"],["HH","Osterferien","2026-03-02","2026-03-13"],
+["HH","Pfingstferien","2026-05-11","2026-05-15"],["HH","Sommerferien","2026-07-09","2026-08-19"],
+["HH","Herbstferien","2026-10-19","2026-10-30"],["HH","Weihnachtsferien","2026-12-21","2027-01-01"],
+["HH","Winterferien","2027-01-29","2027-01-29"],["HH","Osterferien","2027-03-01","2027-03-12"],
+["HH","Pfingstferien","2027-05-07","2027-05-14"],["HH","Sommerferien","2027-07-01","2027-08-11"],
+["HE","Weihnachtsferien","2024-12-23","2025-01-10"],["HE","Osterferien","2025-04-07","2025-04-21"],
+["HE","Sommerferien","2025-07-07","2025-08-15"],["HE","Herbstferien","2025-10-06","2025-10-18"],
+["HE","Weihnachtsferien","2025-12-22","2026-01-10"],["HE","Osterferien","2026-03-30","2026-04-10"],
+["HE","Sommerferien","2026-06-29","2026-08-07"],["HE","Herbstferien","2026-10-05","2026-10-17"],
+["HE","Weihnachtsferien","2026-12-23","2027-01-12"],["HE","Osterferien","2027-03-22","2027-04-02"],
+["HE","Sommerferien","2027-06-28","2027-08-06"],
+["MV","Weihnachtsferien","2024-12-23","2025-01-06"],["MV","Winterferien","2025-02-03","2025-02-14"],
+["MV","Osterferien","2025-04-14","2025-04-23"],["MV","Christi Himmelfahrt (Brückentag)","2025-05-30","2025-05-30"],
+["MV","Pfingstferien","2025-06-06","2025-06-10"],["MV","Sommerferien","2025-07-28","2025-09-06"],
+["MV","Herbstferien (Randtag)","2025-10-02","2025-10-02"],["MV","Herbstferien","2025-10-20","2025-10-24"],
+["MV","Herbstferien (Randtag)","2025-11-03","2025-11-03"],["MV","Weihnachtsferien","2025-12-20","2026-01-03"],
+["MV","Winterferien","2026-02-09","2026-02-20"],["MV","Osterferien","2026-03-30","2026-04-08"],
+["MV","Christi Himmelfahrt (Brückentag)","2026-05-15","2026-05-15"],["MV","Pfingstferien","2026-05-22","2026-05-26"],
+["MV","Sommerferien","2026-07-13","2026-08-22"],["MV","Herbstferien","2026-10-15","2026-10-24"],
+["MV","Weihnachtsferien","2026-12-21","2027-01-02"],["MV","Winterferien","2027-02-08","2027-02-19"],
+["MV","Osterferien","2027-03-24","2027-04-02"],["MV","Christi Himmelfahrt (Brückentag)","2027-05-07","2027-05-07"],
+["MV","Pfingstferien","2027-05-14","2027-05-18"],["MV","Sommerferien","2027-07-05","2027-08-14"],
+["NI","Weihnachtsferien","2024-12-23","2025-01-04"],["NI","Winterferien","2025-02-03","2025-02-04"],
+["NI","Osterferien","2025-04-07","2025-04-19"],["NI","Osterferien (Randtag)","2025-04-30","2025-04-30"],
+["NI","Osterferien (Randtag)","2025-05-02","2025-05-02"],["NI","Christi Himmelfahrt (Brückentag)","2025-05-30","2025-05-30"],
+["NI","Pfingstferien","2025-06-10","2025-06-10"],["NI","Sommerferien","2025-07-03","2025-08-13"],
+["NI","Herbstferien","2025-10-13","2025-10-25"],["NI","Weihnachtsferien","2025-12-22","2026-01-05"],
+["NI","Winterferien","2026-02-02","2026-02-03"],["NI","Osterferien","2026-03-23","2026-04-07"],
+["NI","Christi Himmelfahrt (Brückentag)","2026-05-15","2026-05-15"],["NI","Pfingstferien","2026-05-26","2026-05-26"],
+["NI","Sommerferien","2026-07-02","2026-08-12"],["NI","Herbstferien","2026-10-12","2026-10-24"],
+["NI","Weihnachtsferien","2026-12-23","2027-01-09"],["NI","Winterferien","2027-02-01","2027-02-02"],
+["NI","Osterferien","2027-03-22","2027-04-03"],["NI","Christi Himmelfahrt (Brückentag)","2027-05-07","2027-05-07"],
+["NI","Pfingstferien","2027-05-18","2027-05-18"],["NI","Sommerferien","2027-07-08","2027-08-18"],
+["NW","Weihnachtsferien","2024-12-23","2025-01-06"],["NW","Osterferien","2025-04-14","2025-04-26"],
+["NW","Pfingstferien","2025-06-10","2025-06-10"],["NW","Sommerferien","2025-07-14","2025-08-26"],
+["NW","Herbstferien","2025-10-13","2025-10-25"],["NW","Weihnachtsferien","2025-12-22","2026-01-06"],
+["NW","Osterferien","2026-03-30","2026-04-11"],["NW","Pfingstferien","2026-05-26","2026-05-26"],
+["NW","Sommerferien","2026-07-20","2026-09-01"],["NW","Herbstferien","2026-10-17","2026-10-31"],
+["NW","Weihnachtsferien","2026-12-23","2027-01-06"],["NW","Osterferien","2027-03-22","2027-04-03"],
+["NW","Pfingstferien","2027-05-18","2027-05-18"],["NW","Sommerferien","2027-07-19","2027-08-31"],
+["RP","Weihnachtsferien","2024-12-23","2025-01-08"],["RP","Osterferien","2025-04-14","2025-04-25"],
+["RP","Sommerferien","2025-07-07","2025-08-15"],["RP","Herbstferien","2025-10-13","2025-10-24"],
+["RP","Weihnachtsferien","2025-12-22","2026-01-07"],["RP","Osterferien","2026-03-30","2026-04-10"],
+["RP","Sommerferien","2026-06-29","2026-08-07"],["RP","Herbstferien","2026-10-05","2026-10-16"],
+["RP","Weihnachtsferien","2026-12-23","2027-01-08"],["RP","Osterferien","2027-03-22","2027-04-02"],
+["RP","Sommerferien","2027-06-28","2027-08-06"],
+["SL","Weihnachtsferien","2024-12-23","2025-01-03"],["SL","Winterferien","2025-02-24","2025-03-04"],
+["SL","Osterferien","2025-04-14","2025-04-25"],["SL","Sommerferien","2025-07-07","2025-08-14"],
+["SL","Herbstferien","2025-10-13","2025-10-24"],["SL","Weihnachtsferien","2025-12-22","2026-01-02"],
+["SL","Winterferien","2026-02-16","2026-02-20"],["SL","Osterferien","2026-04-07","2026-04-17"],
+["SL","Sommerferien","2026-06-29","2026-08-07"],["SL","Herbstferien","2026-10-05","2026-10-16"],
+["SL","Weihnachtsferien","2026-12-21","2026-12-31"],["SL","Winterferien","2027-02-08","2027-02-12"],
+["SL","Osterferien","2027-03-30","2027-04-09"],["SL","Sommerferien","2027-06-28","2027-08-06"],
+["SN","Weihnachtsferien","2024-12-23","2025-01-03"],["SN","Winterferien","2025-02-17","2025-03-01"],
+["SN","Osterferien","2025-04-18","2025-04-25"],["SN","Pfingstferien (Randtag)","2025-05-30","2025-05-30"],
+["SN","Sommerferien","2025-06-28","2025-08-08"],["SN","Herbstferien","2025-10-06","2025-10-18"],
+["SN","Weihnachtsferien","2025-12-22","2026-01-02"],["SN","Winterferien","2026-02-09","2026-02-21"],
+["SN","Osterferien","2026-04-03","2026-04-10"],["SN","Pfingstferien (Randtag)","2026-05-15","2026-05-15"],
+["SN","Sommerferien","2026-07-04","2026-08-14"],["SN","Herbstferien","2026-10-12","2026-10-24"],
+["SN","Weihnachtsferien","2026-12-23","2027-01-02"],["SN","Winterferien","2027-02-08","2027-02-19"],
+["SN","Osterferien","2027-03-26","2027-04-02"],["SN","Christi Himmelfahrt (Brückentag)","2027-05-07","2027-05-07"],
+["SN","Pfingstferien","2027-05-15","2027-05-18"],["SN","Sommerferien","2027-07-10","2027-08-20"],
+["ST","Weihnachtsferien","2024-12-23","2025-01-04"],["ST","Winterferien","2025-01-27","2025-01-31"],
+["ST","Osterferien","2025-04-07","2025-04-19"],["ST","Pfingstferien (Randtag)","2025-05-30","2025-05-30"],
+["ST","Sommerferien","2025-06-28","2025-08-08"],["ST","Herbstferien","2025-10-13","2025-10-25"],
+["ST","Weihnachtsferien","2025-12-22","2026-01-05"],["ST","Winterferien","2026-01-31","2026-02-06"],
+["ST","Osterferien","2026-03-30","2026-04-04"],["ST","Pfingstferien","2026-05-26","2026-05-29"],
+["ST","Sommerferien","2026-07-04","2026-08-14"],["ST","Herbstferien","2026-10-19","2026-10-30"],
+["ST","Weihnachtsferien","2026-12-21","2027-01-02"],["ST","Winterferien","2027-02-01","2027-02-06"],
+["ST","Osterferien","2027-03-22","2027-03-27"],["ST","Pfingstferien","2027-05-15","2027-05-22"],
+["ST","Sommerferien","2027-07-10","2027-08-20"],
+["SH","Weihnachtsferien","2024-12-19","2025-01-07"],["SH","Osterferien","2025-04-11","2025-04-25"],
+["SH","Pfingstferien","2025-05-30","2025-05-30"],["SH","Sommerferien","2025-07-28","2025-09-06"],
+["SH","Herbstferien","2025-10-20","2025-10-30"],["SH","Weihnachtsferien","2025-12-19","2026-01-06"],
+["SH","Osterferien","2026-03-26","2026-04-10"],["SH","Pfingstferien","2026-05-15","2026-05-15"],
+["SH","Sommerferien","2026-07-04","2026-08-15"],["SH","Herbstferien","2026-10-12","2026-10-24"],
+["SH","Weihnachtsferien","2026-12-21","2027-01-06"],["SH","Osterferien","2027-03-30","2027-04-10"],
+["SH","Pfingstferien","2027-05-07","2027-05-07"],["SH","Sommerferien","2027-07-03","2027-08-14"],
+["TH","Weihnachtsferien","2024-12-23","2025-01-03"],["TH","Winterferien","2025-02-03","2025-02-08"],
+["TH","Osterferien","2025-04-07","2025-04-19"],["TH","Pfingstferien (Randtag)","2025-05-30","2025-05-30"],
+["TH","Sommerferien","2025-06-28","2025-08-08"],["TH","Herbstferien","2025-10-06","2025-10-18"],
+["TH","Weihnachtsferien","2025-12-22","2026-01-03"],["TH","Winterferien","2026-02-16","2026-02-21"],
+["TH","Osterferien","2026-04-07","2026-04-17"],["TH","Pfingstferien","2026-05-15","2026-05-15"],
+["TH","Sommerferien","2026-07-04","2026-08-14"],["TH","Herbstferien","2026-10-12","2026-10-24"],
+["TH","Weihnachtsferien","2026-12-23","2027-01-02"],["TH","Winterferien","2027-02-01","2027-02-06"],
+["TH","Osterferien","2027-03-22","2027-04-03"],["TH","Pfingstferien","2027-05-07","2027-05-07"],
+["TH","Sommerferien","2027-07-10","2027-08-20"],
+// Erweiterung 25.08.2026: Schuljahr 2027/28, Primaerquelle KMK-PDF FER2027_28.pdf (Stand 09.10.2025)
+["BW","Herbstferien","2027-11-02","2027-11-06"],["BW","Weihnachtsferien","2027-12-23","2028-01-08"],
+["BW","Osterferien (Randtag)","2028-04-13","2028-04-13"],["BW","Osterferien","2028-04-18","2028-04-22"],
+["BW","Pfingstferien","2028-06-06","2028-06-17"],["BW","Sommerferien","2028-07-27","2028-09-09"],
+["BY","Herbstferien","2027-11-02","2027-11-05"],["BY","Weihnachtsferien","2027-12-24","2028-01-07"],
+["BY","Winterferien (Fasching)","2028-02-28","2028-03-03"],["BY","Osterferien","2028-04-10","2028-04-21"],
+["BY","Pfingstferien","2028-06-06","2028-06-16"],["BY","Sommerferien","2028-07-31","2028-09-11"],
+["BE","Herbstferien","2027-10-11","2027-10-23"],["BE","Weihnachtsferien","2027-12-22","2027-12-31"],
+["BE","Winterferien","2028-01-31","2028-02-05"],["BE","Osterferien","2028-04-10","2028-04-22"],
+["BE","Christi Himmelfahrt (Brückentag)","2028-05-26","2028-05-26"],["BE","Pfingstferien","2028-06-01","2028-06-02"],
+["BE","Sommerferien","2028-07-01","2028-08-12"],
+["BB","Herbstferien","2027-10-11","2027-10-23"],["BB","Weihnachtsferien","2027-12-23","2027-12-31"],
+["BB","Winterferien","2028-01-31","2028-02-05"],["BB","Osterferien","2028-04-10","2028-04-22"],
+["BB","Sommerferien","2028-06-29","2028-08-12"],
+["HB","Herbstferien","2027-10-18","2027-10-30"],["HB","Weihnachtsferien","2027-12-23","2028-01-08"],
+["HB","Winterferien","2028-01-31","2028-02-01"],["HB","Osterferien","2028-04-10","2028-04-22"],
+["HB","Christi Himmelfahrt (Brückentag)","2028-05-26","2028-05-26"],["HB","Pfingstferien","2028-06-06","2028-06-06"],
+["HB","Sommerferien","2028-07-20","2028-08-30"],
+["HH","Herbstferien","2027-10-11","2027-10-22"],["HH","Weihnachtsferien","2027-12-20","2027-12-31"],
+["HH","Winterferien","2028-01-28","2028-01-28"],["HH","Osterferien","2028-03-06","2028-03-17"],
+["HH","Pfingstferien","2028-05-22","2028-05-26"],["HH","Sommerferien","2028-07-03","2028-08-11"],
+["HE","Herbstferien","2027-10-04","2027-10-16"],["HE","Weihnachtsferien","2027-12-23","2028-01-11"],
+["HE","Osterferien","2028-04-03","2028-04-14"],["HE","Sommerferien","2028-07-03","2028-08-11"],
+["MV","Herbstferien","2027-10-14","2027-10-23"],["MV","Weihnachtsferien","2027-12-22","2028-01-04"],
+["MV","Winterferien","2028-02-05","2028-02-18"],["MV","Osterferien","2028-04-12","2028-04-21"],
+["MV","Christi Himmelfahrt (Brückentag)","2028-05-26","2028-05-26"],["MV","Pfingstferien","2028-06-02","2028-06-06"],
+["MV","Sommerferien","2028-06-26","2028-08-05"],
+["NI","Herbstferien","2027-10-16","2027-10-30"],["NI","Weihnachtsferien","2027-12-23","2028-01-08"],
+["NI","Winterferien","2028-01-31","2028-02-01"],["NI","Osterferien","2028-04-10","2028-04-22"],
+["NI","Christi Himmelfahrt (Brückentag)","2028-05-26","2028-05-26"],["NI","Pfingstferien","2028-06-06","2028-06-06"],
+["NI","Sommerferien","2028-07-20","2028-08-30"],
+["NW","Herbstferien","2027-10-23","2027-11-06"],["NW","Weihnachtsferien","2027-12-24","2028-01-08"],
+["NW","Osterferien","2028-04-10","2028-04-22"],["NW","Sommerferien","2028-07-10","2028-08-22"],
+["RP","Herbstferien","2027-10-04","2027-10-15"],["RP","Weihnachtsferien","2027-12-23","2028-01-07"],
+["RP","Osterferien","2028-04-10","2028-04-21"],["RP","Sommerferien","2028-07-03","2028-08-11"],
+["SL","Herbstferien","2027-10-04","2027-10-15"],["SL","Weihnachtsferien","2027-12-20","2027-12-31"],
+["SL","Winterferien","2028-02-21","2028-02-29"],["SL","Osterferien","2028-04-12","2028-04-21"],
+["SL","Sommerferien","2028-07-03","2028-08-11"],
+["SN","Herbstferien","2027-10-11","2027-10-23"],["SN","Weihnachtsferien","2027-12-23","2028-01-01"],
+["SN","Winterferien","2028-02-14","2028-02-26"],["SN","Osterferien","2028-04-14","2028-04-22"],
+["SN","Pfingstferien","2028-05-26","2028-05-26"],["SN","Sommerferien","2028-07-22","2028-09-01"],
+["ST","Herbstferien","2027-10-18","2027-10-23"],["ST","Weihnachtsferien","2027-12-20","2027-12-31"],
+["ST","Winterferien","2028-02-07","2028-02-12"],["ST","Osterferien","2028-04-10","2028-04-22"],
+["ST","Pfingstferien","2028-06-03","2028-06-10"],["ST","Sommerferien","2028-07-22","2028-09-01"],
+["SH","Herbstferien","2027-10-11","2027-10-23"],["SH","Weihnachtsferien","2027-12-23","2028-01-08"],
+["SH","Osterferien","2028-04-03","2028-04-15"],["SH","Pfingstferien","2028-05-26","2028-05-26"],
+["SH","Sommerferien","2028-06-24","2028-08-04"],
+["TH","Herbstferien","2027-10-09","2027-10-23"],["TH","Weihnachtsferien","2027-12-23","2027-12-31"],
+["TH","Winterferien","2028-02-07","2028-02-12"],["TH","Osterferien","2028-04-03","2028-04-15"],
+["TH","Pfingstferien","2028-05-26","2028-05-26"],["TH","Sommerferien","2028-07-22","2028-09-01"],
+// Erweiterung 26.08.2026: Schuljahr 2028/29, Primaerquelle KMK-PDF FER2028_29.pdf (Stand 09.10.2025),
+// per pdfplumber-Wortkoordinaten praezise ausgewertet (Randtage/Mehrfach-Segmente je Spalte).
+["BW","Herbstferien","2028-10-30","2028-11-03"],["BW","Weihnachtsferien","2028-12-23","2029-01-05"],
+["BW","Osterferien","2029-03-26","2029-04-07"],["BW","Pfingstferien","2029-05-22","2029-06-01"],
+["BW","Sommerferien","2029-07-26","2029-09-08"],["BY","Herbstferien","2028-10-30","2028-11-03"],
+["BY","Weihnachtsferien","2028-12-23","2029-01-05"],["BY","Winterferien (Fasching)","2029-02-12","2029-02-16"],
+["BY","Osterferien","2029-03-26","2029-04-06"],["BY","Pfingstferien","2029-05-22","2029-06-01"],
+["BY","Sommerferien","2029-07-30","2029-09-10"],["BE","Herbstferien","2028-10-02","2028-10-14"],
+["BE","Weihnachtsferien","2028-12-22","2029-01-02"],["BE","Winterferien","2029-01-29","2029-02-03"],
+["BE","Winterferien (Randtag)","2029-03-09","2029-03-09"],["BE","Osterferien","2029-03-26","2029-04-06"],
+["BE","Osterferien (Randtag)","2029-04-30","2029-04-30"],["BE","Christi Himmelfahrt (Brückentag)","2029-05-11","2029-05-11"],
+["BE","Pfingstferien","2029-05-22","2029-05-25"],["BE","Sommerferien","2029-07-01","2029-08-11"],
+["BB","Herbstferien","2028-10-02","2028-10-14"],["BB","Weihnachtsferien","2028-12-22","2029-01-02"],
+["BB","Winterferien","2029-01-29","2029-02-03"],["BB","Osterferien","2029-03-26","2029-04-06"],
+["BB","Pfingstferien","2029-05-22","2029-05-22"],["BB","Sommerferien","2029-06-28","2029-08-11"],
+["HB","Herbstferien (Randtag)","2028-10-02","2028-10-02"],["HB","Herbstferien","2028-10-23","2028-11-04"],
+["HB","Weihnachtsferien","2028-12-27","2029-01-06"],["HB","Winterferien","2029-02-01","2029-02-02"],
+["HB","Osterferien","2029-03-19","2029-04-03"],["HB","Osterferien (Randtag)","2029-04-30","2029-04-30"],
+["HB","Christi Himmelfahrt (Brückentag)","2029-05-11","2029-05-11"],["HB","Pfingstferien","2029-05-22","2029-05-22"],
+["HB","Sommerferien","2029-07-19","2029-08-29"],["HH","Herbstferien","2028-10-02","2028-10-13"],
+["HH","Herbstferien (Randtag)","2028-10-30","2028-10-30"],["HH","Weihnachtsferien","2028-12-18","2028-12-29"],
+["HH","Winterferien","2029-02-02","2029-02-02"],["HH","Osterferien","2029-03-05","2029-03-16"],
+["HH","Pfingstferien","2029-05-11","2029-05-18"],["HH","Sommerferien","2029-07-02","2029-08-10"],
+["HE","Herbstferien","2028-10-09","2028-10-20"],["HE","Weihnachtsferien","2028-12-27","2029-01-12"],
+["HE","Osterferien","2029-03-29","2029-04-13"],["HE","Sommerferien","2029-07-16","2029-08-24"],
+["MV","Herbstferien (Randtag)","2028-10-02","2028-10-02"],["MV","Herbstferien","2028-10-23","2028-10-28"],
+["MV","Herbstferien (Randtag)","2028-10-30","2028-10-30"],["MV","Weihnachtsferien","2028-12-22","2029-01-02"],
+["MV","Winterferien","2029-02-05","2029-02-16"],["MV","Winterferien (Randtag)","2029-03-09","2029-03-09"],
+["MV","Osterferien","2029-03-28","2029-04-06"],["MV","Osterferien (Randtag)","2029-04-30","2029-04-30"],
+["MV","Christi Himmelfahrt (Brückentag)","2029-05-11","2029-05-11"],["MV","Pfingstferien","2029-05-18","2029-05-22"],
+["MV","Sommerferien","2029-06-18","2029-07-28"],["NI","Herbstferien (Randtag)","2028-10-02","2028-10-02"],
+["NI","Herbstferien","2028-10-23","2028-11-04"],["NI","Weihnachtsferien","2028-12-27","2029-01-06"],
+["NI","Winterferien","2029-02-01","2029-02-02"],["NI","Osterferien","2029-03-19","2029-04-03"],
+["NI","Osterferien (Randtag)","2029-04-30","2029-04-30"],["NI","Christi Himmelfahrt (Brückentag)","2029-05-11","2029-05-11"],
+["NI","Pfingstferien","2029-05-22","2029-05-22"],["NI","Sommerferien","2029-07-19","2029-08-29"],
+["NW","Herbstferien","2028-10-23","2028-11-04"],["NW","Weihnachtsferien","2028-12-21","2029-01-05"],
+["NW","Osterferien","2029-03-26","2029-04-07"],["NW","Pfingstferien","2029-05-22","2029-05-22"],
+["NW","Sommerferien","2029-07-02","2029-08-14"],["RP","Herbstferien","2028-10-09","2028-10-20"],
+["RP","Weihnachtsferien","2028-12-21","2029-01-08"],["RP","Osterferien","2029-03-26","2029-04-06"],
+["RP","Sommerferien","2029-07-16","2029-08-24"],["SL","Herbstferien","2028-10-09","2028-10-20"],
+["SL","Weihnachtsferien","2028-12-20","2029-01-02"],["SL","Winterferien","2029-02-12","2029-02-16"],
+["SL","Osterferien","2029-03-26","2029-04-06"],["SL","Pfingstferien","2029-05-22","2029-05-25"],
+["SL","Sommerferien","2029-07-16","2029-08-24"],["SN","Herbstferien","2028-10-23","2028-11-03"],
+["SN","Weihnachtsferien","2028-12-23","2029-01-03"],["SN","Winterferien","2029-02-05","2029-02-16"],
+["SN","Osterferien","2029-03-29","2029-04-06"],["SN","Pfingstferien (Randtag)","2029-05-11","2029-05-11"],
+["SN","Pfingstferien","2029-05-19","2029-05-22"],["SN","Sommerferien","2029-07-21","2029-08-31"],
+["ST","Herbstferien (Randtag)","2028-10-02","2028-10-02"],["ST","Herbstferien","2028-10-30","2028-11-03"],
+["ST","Weihnachtsferien","2028-12-21","2029-01-02"],["ST","Winterferien","2029-02-05","2029-02-10"],
+["ST","Osterferien","2029-03-26","2029-03-31"],["ST","Osterferien (Randtag)","2029-04-30","2029-04-30"],
+["ST","Pfingstferien","2029-05-11","2029-05-25"],["ST","Sommerferien","2029-07-21","2029-08-31"],
+["SH","Herbstferien","2028-10-16","2028-10-30"],["SH","Weihnachtsferien","2028-12-21","2029-01-05"],
+["SH","Osterferien","2029-03-23","2029-04-06"],["SH","Pfingstferien","2029-05-11","2029-05-11"],
+["SH","Sommerferien","2029-06-23","2029-08-03"],["TH","Herbstferien","2028-10-23","2028-11-03"],
+["TH","Weihnachtsferien","2028-12-23","2029-01-05"],["TH","Winterferien","2029-02-12","2029-02-17"],
+["TH","Osterferien","2029-03-26","2029-04-07"],["TH","Pfingstferien","2029-05-11","2029-05-11"],
+["TH","Sommerferien","2029-07-21","2029-08-31"]
+  ];
+
+  var DAY_MS = 86400000;
+  function parseISO(s) { return new Date(s + "T00:00:00Z"); }
+  function toISO(d) { return d.toISOString().slice(0, 10); }
+  function addDaysISO(iso, n) { return toISO(new Date(parseISO(iso).getTime() + n * DAY_MS)); }
+  function dayIndex(iso, fromIso) { return Math.round((parseISO(iso) - parseISO(fromIso)) / DAY_MS); }
+  function daysInclusive(s, e) { return dayIndex(e, s) + 1; }
+  function todayISO() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }).format(new Date()); }
+  var MONTHS_SHORT = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
+  var WEEKDAYS = ["So","Mo","Di","Mi","Do","Fr","Sa"];
+  function fmtDate(iso) {
+    var d = parseISO(iso);
+    return WEEKDAYS[d.getUTCDay()] + " " + String(d.getUTCDate()).padStart(2,"0") + "." + MONTHS_SHORT[d.getUTCMonth()] + " '" + String(d.getUTCFullYear()).slice(2);
+  }
+  function fmtShort(iso) {
+    var d = parseISO(iso);
+    return String(d.getUTCDate()).padStart(2,"0") + "." + String(d.getUTCMonth()+1).padStart(2,"0") + "." + String(d.getUTCFullYear()).slice(2);
+  }
+
+  function activeMapOn(iso) {
+    var m = {};
+    for (var i = 0; i < PERIODS.length; i++) {
+      var p = PERIODS[i];
+      if (iso >= p[2] && iso <= p[3] && !m[p[0]]) m[p[0]] = p[1];
+    }
+    return m;
+  }
+  function populationFractionOf(map) {
+    var sum = 0;
+    for (var code in map) sum += STATE_POPULATION[code] || 0;
+    return sum / TOTAL_POPULATION;
+  }
+
+  var GLOBAL_START = "2025-01-01";
+  var GLOBAL_END = "2029-09-10";
+
+  var RANGES = {
+    "4w":  function (t) { return { start: addDaysISO(t, -2), end: addDaysISO(t, 28), label: "4 Wochen" }; },
+    "3m":  function (t) { return { start: addDaysISO(t, -7), end: addDaysISO(t, 90), label: "3 Monate" }; },
+    "2025":function () { return { start: "2025-01-01", end: "2025-12-31", label: "2025" }; },
+    "2026":function () { return { start: "2026-01-01", end: "2026-12-31", label: "2026" }; },
+    "2027":function () { return { start: "2027-01-01", end: "2027-12-31", label: "2027" }; },
+    "2028":function () { return { start: "2028-01-01", end: "2028-12-31", label: "2028" }; },
+    "2029":function () { return { start: "2029-01-01", end: "2029-09-10", label: "2029" }; },
+    "all": function () { return { start: GLOBAL_START, end: GLOBAL_END, label: "Gesamt (2025–2029)" }; }
+  };
+  var RANGE_ORDER = ["4w","3m","2025","2026","2027","2028","2029","all"];
+  var currentRangeKey = "3m";
+
+  var TODAY = todayISO();
+
+  // ---------- Hero ----------
+  function renderHero() {
+    document.getElementById("genDate").textContent = "Stand " + fmtShort(TODAY);
+    document.getElementById("todayDateLabel").textContent = "";
+    document.getElementById("nextWeekDateLabel").textContent = "";
+
+    var t = activeMapOn(TODAY);
+    var tCodes = Object.keys(t).sort();
+    document.getElementById("todayCount").textContent = tCodes.length;
+    document.getElementById("todayPopPct").textContent = "(≈ " + (populationFractionOf(t) * 100).toFixed(0) + "% Bevölkerung)";
+    renderChips("todayChips", tCodes, t);
+
+    var nw = addDaysISO(TODAY, 7);
+    var n = activeMapOn(nw);
+    var nCodes = Object.keys(n).sort();
+    document.getElementById("nextWeekCount").textContent = nCodes.length;
+    document.getElementById("nextWeekPopPct").textContent = "(≈ " + (populationFractionOf(n) * 100).toFixed(0) + "% Bevölkerung)";
+    renderChips("nextWeekChips", nCodes, n);
+
+    var labels = document.querySelectorAll(".hero-label");
+    labels[0].innerHTML = "Heute <span class=\"num\" style=\"color:var(--text-secondary)\">" + fmtShort(TODAY) + "</span>";
+    labels[1].innerHTML = "In 7 Tagen <span class=\"num\" style=\"color:var(--text-secondary)\">" + fmtShort(nw) + "</span>";
+
+    // soonest end among today's active states
+    var soonest = null;
+    tCodes.forEach(function (code) {
+      PERIODS.forEach(function (p) {
+        if (p[0] === code && TODAY >= p[2] && TODAY <= p[3]) {
+          if (!soonest || p[3] < soonest.end) soonest = { code: code, end: p[3] };
+        }
+      });
+    });
+    var soonestEl = document.getElementById("soonestEnd");
+    if (soonest) {
+      soonestEl.innerHTML = "Endet als nächstes: <strong>" + STATE_NAMES[soonest.code] + "</strong> am " + fmtShort(soonest.end) + ".";
+    } else {
+      soonestEl.textContent = "";
+    }
+  }
+
+  function renderChips(elId, codes, map) {
+    var el = document.getElementById(elId);
+    el.innerHTML = "";
+    if (!codes.length) {
+      var e = document.createElement("span");
+      e.className = "chip-empty";
+      e.textContent = "keine Ferien";
+      el.appendChild(e);
+      return;
+    }
+    codes.forEach(function (code) {
+      var chip = document.createElement("span");
+      chip.className = "chip";
+      chip.title = STATE_NAMES[code] + " — " + map[code];
+      var dot = document.createElement("span");
+      dot.className = "dot";
+      chip.appendChild(dot);
+      chip.appendChild(document.createTextNode(code));
+      el.appendChild(chip);
+    });
+  }
+
+  // ---------- Tabs ----------
+  function renderTabs() {
+    var wrap = document.getElementById("tabs");
+    wrap.innerHTML = "";
+    RANGE_ORDER.forEach(function (key) {
+      var btn = document.createElement("button");
+      btn.className = "tab" + (key === currentRangeKey ? " active" : "");
+      btn.type = "button";
+      btn.textContent = RANGES[key](TODAY).label;
+      btn.addEventListener("click", function () {
+        currentRangeKey = key;
+        renderTabs();
+        renderChart();
+      });
+      wrap.appendChild(btn);
+    });
+  }
+
+  // ---------- Chart geometry ----------
+  var VB_W = 1200, VB_H = 300, M_LEFT = 40, M_RIGHT = 10, M_TOP = 12, M_BOTTOM = 26;
+  var PLOT_W = VB_W - M_LEFT - M_RIGHT, PLOT_H = VB_H - M_TOP - M_BOTTOM;
+
+  function pctForIso(iso, start, end) {
+    var total = daysInclusive(start, end);
+    var pos = dayIndex(iso, start);
+    return (pos / total) * 100 + (0.5 / total) * 100; // center within the day-slot
+  }
+  function leftWidthForBlock(pStart, pEnd, start, end) {
+    var total = daysInclusive(start, end);
+    var s = pStart < start ? start : pStart;
+    var e = pEnd > end ? end : pEnd;
+    if (s > e) return null;
+    var offStart = dayIndex(s, start);
+    var offEndExcl = dayIndex(e, start) + 1;
+    return { left: (offStart / total) * 100, width: ((offEndExcl - offStart) / total) * 100 };
+  }
+
+  function buildTicks(start, end) {
+    var totalDays = daysInclusive(start, end);
+    var ticks = [];
+    if (totalDays > 400) {
+      // quarterly: Jan/Apr/Jul/Okt
+      var d = parseISO(start);
+      var y = d.getUTCFullYear(), m = d.getUTCMonth();
+      m = Math.ceil(m / 3) * 3;
+      var cur = new Date(Date.UTC(y, m, 1));
+      while (toISO(cur) <= end) {
+        var iso = toISO(cur);
+        if (iso >= start) ticks.push({ iso: iso, label: MONTHS_SHORT[cur.getUTCMonth()] + " '" + String(cur.getUTCFullYear()).slice(2) });
+        cur = new Date(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth() + 3, 1));
+      }
+    } else if (totalDays > 100) {
+      var d2 = parseISO(start);
+      var cur2 = new Date(Date.UTC(d2.getUTCFullYear(), d2.getUTCMonth(), 1));
+      if (toISO(cur2) < start) cur2 = new Date(Date.UTC(cur2.getUTCFullYear(), cur2.getUTCMonth() + 1, 1));
+      while (toISO(cur2) <= end) {
+        var iso2 = toISO(cur2);
+        ticks.push({ iso: iso2, label: MONTHS_SHORT[cur2.getUTCMonth()] + " '" + String(cur2.getUTCFullYear()).slice(2) });
+        cur2 = new Date(Date.UTC(cur2.getUTCFullYear(), cur2.getUTCMonth() + 1, 1));
+      }
+    } else {
+      // weekly, Mondays
+      var d3 = parseISO(start);
+      var wd = d3.getUTCDay();
+      var toMon = (wd === 0 ? 1 : (8 - wd) % 7);
+      var cur3 = new Date(d3.getTime() + toMon * DAY_MS);
+      while (toISO(cur3) <= end) {
+        var iso3 = toISO(cur3);
+        ticks.push({ iso: iso3, label: String(cur3.getUTCDate()).padStart(2,"0") + "." + String(cur3.getUTCMonth()+1).padStart(2,"0") + "." });
+        cur3 = new Date(cur3.getTime() + 7 * DAY_MS);
+      }
+    }
+    return ticks;
+  }
+
+  // Dichtere Achse fuers Werbezeitraum-Tool (Nutzer-Feedback 25.08.2026: "muss mehr
+  // Tage + Wochentage zeigen") - im Unterschied zu buildTicks() (Monats-/Wochen-
+  // Raster fuer den grossen Radar-Chart) hier immer taggenau mit Wochentagskuerzel,
+  // Schrittweite so gewaehlt, dass unabhaengig vom gewaehlten Zeitraum ca. 14-16
+  // Ticks entstehen (nie ueberladen, aber deutlich dichter als nur wochenweise).
+  function buildAwTicks(start, end) {
+    var totalDays = daysInclusive(start, end);
+    var step = Math.max(1, Math.round(totalDays / 14));
+    var ticks = [];
+    var cur = start;
+    while (cur <= end) {
+      var d = parseISO(cur);
+      ticks.push({ iso: cur, label: WEEKDAYS[d.getUTCDay()] + " " + String(d.getUTCDate()).padStart(2, "0") + "." + String(d.getUTCMonth() + 1).padStart(2, "0") + "." });
+      cur = addDaysISO(cur, step);
+    }
+    if (ticks.length && ticks[ticks.length - 1].iso !== end) {
+      var de = parseISO(end);
+      ticks.push({ iso: end, label: WEEKDAYS[de.getUTCDay()] + " " + String(de.getUTCDate()).padStart(2, "0") + "." + String(de.getUTCMonth() + 1).padStart(2, "0") + "." });
+    }
+    return ticks;
+  }
+
+  var tooltipEl = document.getElementById("tooltip");
+  function showTooltip(html, clientX, clientY, containerRect) {
+    tooltipEl.innerHTML = html;
+    tooltipEl.classList.add("show");
+    var x = clientX - containerRect.left + 14;
+    var y = clientY - containerRect.top - 10;
+    var maxX = containerRect.width - 230;
+    if (x > maxX) x = clientX - containerRect.left - 234;
+    tooltipEl.style.left = x + "px";
+    tooltipEl.style.top = y + "px";
+  }
+  function hideTooltip() { tooltipEl.classList.remove("show"); }
+
+  function renderChart() {
+    var range = RANGES[currentRangeKey](TODAY);
+    var start = range.start, end = range.end;
+    document.getElementById("rangeLabel").textContent = fmtShort(start) + " – " + fmtShort(end);
+
+    var totalDays = daysInclusive(start, end);
+    var counts = new Array(totalDays);
+    var activeByDay = new Array(totalDays);
+    var cur = start;
+    for (var i = 0; i < totalDays; i++) {
+      var m = activeMapOn(cur);
+      activeByDay[i] = m;
+      counts[i] = Object.keys(m).length;
+      cur = addDaysISO(cur, 1);
+    }
+
+    // ---- Area chart ----
+    var svg = document.getElementById("areaSvg");
+    svg.innerHTML = "";
+    var css = getComputedStyle(document.body);
+    var accent = css.getPropertyValue("--accent").trim();
+    var wash = css.getPropertyValue("--accent-wash").trim();
+    var gridline = css.getPropertyValue("--gridline").trim();
+    var muted = css.getPropertyValue("--text-muted").trim();
+    var todayColor = css.getPropertyValue("--today-line").trim();
+
+    function xAt(i) { return M_LEFT + (i / (totalDays - 1 || 1)) * PLOT_W; }
+    function yAt(c) { return M_TOP + (1 - c / 16) * PLOT_H; }
+
+    var ns = "http://www.w3.org/2000/svg";
+    function el(tag, attrs) {
+      var e = document.createElementNS(ns, tag);
+      for (var k in attrs) e.setAttribute(k, attrs[k]);
+      return e;
+    }
+
+    // gridlines 0/4/8/12/16
+    [0,4,8,12,16].forEach(function (v) {
+      var y = yAt(v);
+      svg.appendChild(el("line", { x1: M_LEFT, x2: VB_W - M_RIGHT, y1: y, y2: y, stroke: gridline, "stroke-width": 1 }));
+      var t = el("text", { x: M_LEFT - 8, y: y + 4, "text-anchor": "end", "font-size": 11, fill: muted, "font-family": "IBM Plex Mono, monospace" });
+      t.textContent = v;
+      svg.appendChild(t);
+    });
+
+    // area + line
+    var pts = [];
+    for (var j = 0; j < totalDays; j++) pts.push(xAt(j) + "," + yAt(counts[j]));
+    var linePath = "M" + pts.join(" L");
+    var areaPath = linePath + " L" + xAt(totalDays - 1) + "," + (M_TOP + PLOT_H) + " L" + xAt(0) + "," + (M_TOP + PLOT_H) + " Z";
+    svg.appendChild(el("path", { d: areaPath, fill: wash, stroke: "none" }));
+    svg.appendChild(el("path", { d: linePath, fill: "none", stroke: accent, "stroke-width": 2, "stroke-linejoin": "round" }));
+
+    // today marker
+    var todayIdx = dayIndex(TODAY, start);
+    if (todayIdx >= 0 && todayIdx < totalDays) {
+      var tx = xAt(todayIdx);
+      svg.appendChild(el("line", { x1: tx, x2: tx, y1: M_TOP, y2: M_TOP + PLOT_H, stroke: todayColor, "stroke-width": 1, "stroke-dasharray": "3,3", opacity: 0.55 }));
+      var lbl = el("text", { x: tx, y: M_TOP - 2, "text-anchor": todayIdx > totalDays * 0.85 ? "end" : "middle", "font-size": 10.5, fill: muted, "font-family": "IBM Plex Mono, monospace" });
+      lbl.textContent = "heute";
+      svg.appendChild(lbl);
+    }
+
+    // crosshair group
+    var crossLine = el("line", { x1: 0, x2: 0, y1: M_TOP, y2: M_TOP + PLOT_H, stroke: muted, "stroke-width": 1, opacity: 0 });
+    svg.appendChild(crossLine);
+    var crossDot = el("circle", { r: 4, fill: accent, stroke: css.getPropertyValue("--surface").trim(), "stroke-width": 2, opacity: 0 });
+    svg.appendChild(crossDot);
+
+    var hitRect = el("rect", { x: M_LEFT, y: M_TOP, width: PLOT_W, height: PLOT_H, fill: "transparent" });
+    svg.appendChild(hitRect);
+
+    var chartCard = document.querySelector(".chart-card");
+
+    function onMove(evt) {
+      var rect = svg.getBoundingClientRect();
+      var svgX = (evt.clientX - rect.left) / rect.width * VB_W;
+      var idx = Math.round(((svgX - M_LEFT) / PLOT_W) * (totalDays - 1));
+      idx = Math.max(0, Math.min(totalDays - 1, idx));
+      var iso = addDaysISO(start, idx);
+      var cx = xAt(idx), cy = yAt(counts[idx]);
+      crossLine.setAttribute("x1", cx); crossLine.setAttribute("x2", cx); crossLine.setAttribute("opacity", 0.4);
+      crossDot.setAttribute("cx", cx); crossDot.setAttribute("cy", cy); crossDot.setAttribute("opacity", 1);
+      var codes = Object.keys(activeByDay[idx]).sort();
+      var statesHtml = codes.length ? codes.join(", ") : "keine";
+      var popPct = populationFractionOf(activeByDay[idx]) * 100;
+      var cardRect = chartCard.getBoundingClientRect();
+      showTooltip(
+        "<div class=\"tt-date\">" + fmtDate(iso) + "</div>" +
+        "<div class=\"tt-value\">" + codes.length + " von 16 · ≈" + popPct.toFixed(0) + "% Bevölkerung</div>" +
+        "<div class=\"tt-states\">" + statesHtml + "</div>",
+        evt.clientX, evt.clientY, cardRect
+      );
+      // Nutzer-Anforderung 25.08.2026: beim Hovern die betroffenen Bundesländer-Balken
+      // in der Liste darunter synchron blau markieren ("click-blue" = --brand).
+      document.querySelectorAll("#heatmap .hm-row").forEach(function (row) {
+        var isActive = false;
+        row.querySelectorAll(".hm-block").forEach(function (b) {
+          var on = iso >= b.dataset.start && iso <= b.dataset.end;
+          b.classList.toggle("hover-sync", on);
+          if (on) isActive = true;
+        });
+        row.classList.toggle("hover-sync", isActive);
+      });
+    }
+    function onLeave() {
+      crossLine.setAttribute("opacity", 0);
+      crossDot.setAttribute("opacity", 0);
+      hideTooltip();
+      document.querySelectorAll("#heatmap .hover-sync").forEach(function (el) {
+        el.classList.remove("hover-sync");
+      });
+    }
+    hitRect.addEventListener("pointermove", onMove);
+    hitRect.addEventListener("pointerleave", onLeave);
+
+    // ---- Heatmap ----
+    var hm = document.getElementById("heatmap");
+    hm.innerHTML = "";
+    var todayMap = activeMapOn(TODAY);
+
+    STATE_ORDER.forEach(function (code) {
+      var row = document.createElement("div");
+      row.className = "hm-row";
+
+      var label = document.createElement("div");
+      label.className = "hm-label";
+      var dot = document.createElement("span");
+      dot.className = "live-dot" + (todayMap[code] ? " on" : "");
+      dot.title = todayMap[code] ? (code + " hat heute Ferien") : (code + " hat heute keine Ferien");
+      var codeEl = document.createElement("span");
+      codeEl.className = "code";
+      codeEl.textContent = code;
+      var fullEl = document.createElement("span");
+      fullEl.className = "full";
+      fullEl.textContent = STATE_NAMES[code];
+      label.appendChild(dot); label.appendChild(codeEl); label.appendChild(fullEl);
+
+      var track = document.createElement("div");
+      track.className = "hm-track";
+
+      PERIODS.forEach(function (p) {
+        if (p[0] !== code) return;
+        var r = leftWidthForBlock(p[2], p[3], start, end);
+        if (!r) return;
+        var block = document.createElement("div");
+        block.className = "hm-block";
+        block.dataset.start = p[2];
+        block.dataset.end = p[3];
+        block.style.left = r.left + "%";
+        block.style.width = r.width + "%";
+        block.addEventListener("pointerenter", function (evt) {
+          var cardRect = chartCard.getBoundingClientRect();
+          var days = daysInclusive(p[2], p[3]);
+          showTooltip(
+            "<div class=\"tt-date\">" + STATE_NAMES[code] + "</div>" +
+            "<div class=\"tt-value\">" + p[1] + "</div>" +
+            "<div class=\"tt-states\">" + fmtShort(p[2]) + " – " + fmtShort(p[3]) + " (" + days + (days === 1 ? " Tag" : " Tage") + ")</div>",
+            evt.clientX, evt.clientY, cardRect
+          );
+        });
+        block.addEventListener("pointermove", function (evt) {
+          var cardRect = chartCard.getBoundingClientRect();
+          tooltipEl.style.left = (evt.clientX - cardRect.left + 14) + "px";
+          tooltipEl.style.top = (evt.clientY - cardRect.top - 10) + "px";
+        });
+        block.addEventListener("pointerleave", hideTooltip);
+        track.appendChild(block);
+      });
+
+      row.appendChild(label);
+      row.appendChild(track);
+      hm.appendChild(row);
+    });
+
+    // ---- Axis ticks ----
+    var axisTrack = document.getElementById("axisTicks");
+    axisTrack.innerHTML = "";
+    var ticks = buildTicks(start, end);
+    ticks.forEach(function (t) {
+      var r = leftWidthForBlock(t.iso, t.iso, start, end);
+      if (!r) return;
+      var tick = document.createElement("span");
+      tick.className = "axis-tick";
+      tick.style.left = r.left + "%";
+      tick.textContent = t.label;
+      axisTrack.appendChild(tick);
+    });
+
+  }
+
+  // ---------- Werbezeitraum-Maske ----------
+  // Welche Bundeslaender fliessen in die Auswertung ein (Nutzer-Anforderung
+  // 25.08.2026: "Bundesländer anhaken ... wann in welchem Bundesland Werbe-
+  // maßnahmen Sinn macht") - Default: alle 16 (bisheriges Verhalten unveraendert).
+  var awSelectedStates = STATE_ORDER.slice();
+
+  function awFilterMap(fullMap) {
+    var out = {};
+    awSelectedStates.forEach(function (code) { if (fullMap[code]) out[code] = fullMap[code]; });
+    return out;
+  }
+
+  // Klassifiziert einen Tag nach Ferienabdeckung RELATIV zur Anzahl ausgewaehlter
+  // Laender (bei allen 16: 0-2="ferienarm", 3-8="gemischt", 9-16="ferienstark" -
+  // bei einer Teilauswahl proportional skaliert). Schwellen sind eine grobe
+  // Faustregel, kein statistisch hergeleiteter Wert.
+  function bucketOf(count, maxCount) {
+    if (count <= maxCount * 0.15) return "low";
+    if (count <= maxCount * 0.5) return "mid";
+    return "high";
+  }
+
+  function renderAdWindow() {
+    var fromEl = document.getElementById("awFrom");
+    var toEl = document.getElementById("awTo");
+    var from = fromEl.value, to = toEl.value;
+    if (!from || !to || from > to) return;
+    if (from < GLOBAL_START) from = GLOBAL_START;
+    if (to > GLOBAL_END) to = GLOBAL_END;
+
+    var maxCount = awSelectedStates.length || 1;
+    var totalDays = daysInclusive(from, to);
+    var counts = new Array(totalDays);
+    var activeByDay = new Array(totalDays);
+    var cur = from, sum = 0, popSum = 0;
+    var buckets = { low: 0, mid: 0, high: 0 };
+    for (var i = 0; i < totalDays; i++) {
+      var m = awFilterMap(activeMapOn(cur));
+      activeByDay[i] = m;
+      var c = Object.keys(m).length;
+      counts[i] = c;
+      sum += c;
+      popSum += populationFractionOf(m);
+      buckets[bucketOf(c, maxCount)]++;
+      cur = addDaysISO(cur, 1);
+    }
+    var avg = sum / totalDays;
+    var avgPopPct = (popSum / totalDays) * 100;
+
+    document.getElementById("awDays").textContent = totalDays + (totalDays === 1 ? " Tag" : " Tage");
+    document.getElementById("awDaysSub").textContent = fmtShort(from) + " – " + fmtShort(to);
+    document.getElementById("awAvg").textContent = avg.toFixed(1);
+    document.getElementById("awAvgSub").textContent = "von " + maxCount + (maxCount === STATE_ORDER.length ? "" : " ausgewählten");
+    document.getElementById("awPopSub").textContent = "≈" + avgPopPct.toFixed(0) + "% Bevölkerung";
+
+    var pctLow = (buckets.low / totalDays) * 100;
+    var pctMid = (buckets.mid / totalDays) * 100;
+    var pctHigh = (buckets.high / totalDays) * 100;
+    document.getElementById("awDistLabel").textContent =
+      buckets.low + "T arm · " + buckets.mid + "T gemischt · " + buckets.high + "T stark";
+    document.getElementById("awDistBar").innerHTML =
+      "<span class=\"seg-low\" style=\"width:" + pctLow + "%\"></span>" +
+      "<span class=\"seg-mid\" style=\"width:" + pctMid + "%\"></span>" +
+      "<span class=\"seg-high\" style=\"width:" + pctHigh + "%\"></span>";
+
+    var verdictEl = document.getElementById("awVerdict");
+    var verdictTextEl = document.getElementById("awVerdictText");
+    var avgFrac = maxCount ? avg / maxCount : 0;
+    verdictEl.className = "aw-verdict " + (avgFrac <= 0.19 ? "good" : avgFrac <= 0.5 ? "mixed" : "high");
+    verdictTextEl.textContent = !maxCount
+      ? "Keine Bundesländer ausgewählt"
+      : avgFrac <= 0.19
+      ? "Ferienarm — günstiges Fenster für breite Akquise"
+      : avgFrac <= 0.5
+      ? "Gemischt — je nach Zielregion unterschiedlich"
+      : "Ferien-Hochphase — schwächer für generische Akquise, ggf. Urlaubsansage-Messaging";
+
+    var svg = document.getElementById("awSvg");
+    svg.innerHTML = "";
+    var css = getComputedStyle(document.body);
+    var accent = css.getPropertyValue("--accent").trim();
+    var wash = css.getPropertyValue("--accent-wash").trim();
+    var gridline = css.getPropertyValue("--gridline").trim();
+    var muted = css.getPropertyValue("--text-muted").trim();
+    var textPrimary = css.getPropertyValue("--text-primary").trim();
+    var todayColor = css.getPropertyValue("--today-line").trim();
+    var surface = css.getPropertyValue("--surface").trim();
+
+    var vbW = 1200, vbH = 160, mLeft = 40, mRight = 10, mTop = 10, mBottom = 8;
+    var plotW = vbW - mLeft - mRight, plotH = vbH - mTop - mBottom;
+    function xAt(i) { return mLeft + (i / (totalDays - 1 || 1)) * plotW; }
+    function yAt(c) { return mTop + (1 - c / maxCount) * plotH; }
+    var ns = "http://www.w3.org/2000/svg";
+    function el(tag, attrs) {
+      var e = document.createElementNS(ns, tag);
+      for (var k in attrs) e.setAttribute(k, attrs[k]);
+      return e;
+    }
+
+    var gridTicks = maxCount <= 4 ? [0, maxCount] : [0, Math.round(maxCount / 2), maxCount];
+    gridTicks.forEach(function (v) {
+      var y = yAt(v);
+      svg.appendChild(el("line", { x1: mLeft, x2: vbW - mRight, y1: y, y2: y, stroke: gridline, "stroke-width": 1 }));
+      var t = el("text", { x: mLeft - 8, y: y + 4, "text-anchor": "end", "font-size": 11, fill: muted, "font-family": "IBM Plex Mono, monospace" });
+      t.textContent = v;
+      svg.appendChild(t);
+    });
+
+    var pts = [];
+    for (var j = 0; j < totalDays; j++) pts.push(xAt(j) + "," + yAt(counts[j]));
+    var linePath = "M" + pts.join(" L");
+    var areaPath = linePath + " L" + xAt(totalDays - 1) + "," + (mTop + plotH) + " L" + xAt(0) + "," + (mTop + plotH) + " Z";
+    svg.appendChild(el("path", { d: areaPath, fill: wash, stroke: "none" }));
+    svg.appendChild(el("path", { d: linePath, fill: "none", stroke: accent, "stroke-width": 2, "stroke-linejoin": "round" }));
+
+    var todayIdx = dayIndex(TODAY, from);
+    if (todayIdx >= 0 && todayIdx < totalDays) {
+      var tx = xAt(todayIdx);
+      svg.appendChild(el("line", { x1: tx, x2: tx, y1: mTop, y2: mTop + plotH, stroke: todayColor, "stroke-width": 1, "stroke-dasharray": "3,3", opacity: 0.5 }));
+    }
+
+    // Crosshair (Nutzer-Feedback 25.08.2026: "sollte man bei Mausfahrten einen
+    // vertikalen Strich sehen" - war zuvor zu blass/duenn, jetzt deutlich sichtbar:
+    // volle Deckkraft, Vordergrundfarbe statt gedaempftem Grau, etwas dicker).
+    var crossLine = el("line", { x1: 0, x2: 0, y1: mTop, y2: mTop + plotH, stroke: textPrimary, "stroke-width": 1.5, opacity: 0, "stroke-dasharray": "4,3" });
+    svg.appendChild(crossLine);
+    var crossDot = el("circle", { r: 4, fill: accent, stroke: surface, "stroke-width": 2, opacity: 0 });
+    svg.appendChild(crossDot);
+    var hitRect = el("rect", { x: mLeft, y: mTop, width: plotW, height: plotH, fill: "transparent" });
+    svg.appendChild(hitRect);
+
+    var awTooltipEl = document.getElementById("awTooltip");
+    var cardEl = document.getElementById("adWindowCard");
+
+    hitRect.addEventListener("pointermove", function (evt) {
+      var rect = svg.getBoundingClientRect();
+      var svgX = (evt.clientX - rect.left) / rect.width * vbW;
+      var idx = Math.round(((svgX - mLeft) / plotW) * (totalDays - 1));
+      idx = Math.max(0, Math.min(totalDays - 1, idx));
+      var iso = addDaysISO(from, idx);
+      var cx = xAt(idx), cy = yAt(counts[idx]);
+      crossLine.setAttribute("x1", cx); crossLine.setAttribute("x2", cx); crossLine.setAttribute("opacity", 0.85);
+      crossDot.setAttribute("cx", cx); crossDot.setAttribute("cy", cy); crossDot.setAttribute("opacity", 1);
+      var codes = Object.keys(activeByDay[idx]).sort();
+      var popPct = populationFractionOf(activeByDay[idx]) * 100;
+      var cardRect = cardEl.getBoundingClientRect();
+      awTooltipEl.innerHTML =
+        "<div class=\"tt-date\">" + fmtDate(iso) + "</div>" +
+        "<div class=\"tt-value\">" + codes.length + " von " + maxCount + " · ≈" + popPct.toFixed(0) + "% Bevölkerung</div>" +
+        "<div class=\"tt-states\">" + (codes.length ? codes.join(", ") : "keine") + "</div>";
+      awTooltipEl.classList.add("show");
+      var x = evt.clientX - cardRect.left + 14;
+      var y = evt.clientY - cardRect.top - 10;
+      var maxX = cardRect.width - 270;
+      if (x > maxX) x = evt.clientX - cardRect.left - 274;
+      awTooltipEl.style.left = x + "px";
+      awTooltipEl.style.top = y + "px";
+      // "gleiches oben wie unten" (Nutzer-Anforderung 25.08.2026): hier gibt es keine
+      // Balken, sondern die Bundesländer-Chips - die betroffenen leuchten synchron auf.
+      var activeSet = {};
+      codes.forEach(function (c) { activeSet[c] = true; });
+      document.querySelectorAll("#awStateChips .aw-state-chip").forEach(function (chip) {
+        chip.classList.toggle("hover-sync", !!activeSet[chip.dataset.code]);
+      });
+    });
+    hitRect.addEventListener("pointerleave", function () {
+      crossLine.setAttribute("opacity", 0);
+      crossDot.setAttribute("opacity", 0);
+      awTooltipEl.classList.remove("show");
+      document.querySelectorAll("#awStateChips .aw-state-chip.hover-sync").forEach(function (chip) {
+        chip.classList.remove("hover-sync");
+      });
+    });
+
+    var axisTrack = document.getElementById("awAxisTicks");
+    axisTrack.innerHTML = "";
+    buildAwTicks(from, to).forEach(function (t) {
+      var r = leftWidthForBlock(t.iso, t.iso, from, to);
+      if (!r) return;
+      var tick = document.createElement("span");
+      tick.className = "axis-tick";
+      tick.style.left = r.left + "%";
+      tick.textContent = t.label;
+      axisTrack.appendChild(tick);
+    });
+  }
+
+  var awFromEl = document.getElementById("awFrom");
+  var awToEl = document.getElementById("awTo");
+  awFromEl.min = GLOBAL_START; awFromEl.max = GLOBAL_END;
+  awToEl.min = GLOBAL_START; awToEl.max = GLOBAL_END;
+  awFromEl.value = TODAY;
+  awToEl.value = addDaysISO(TODAY, 30);
+  awFromEl.addEventListener("change", renderAdWindow);
+  awToEl.addEventListener("change", renderAdWindow);
+
+  // Bundesländer-Chips (Nutzer-Anforderung 25.08.2026): Klick toggelt Zugehörigkeit
+  // zu awSelectedStates, "Alle"/"Keine" fuer schnellen Reset.
+  var awChipsEl = document.getElementById("awStateChips");
+  STATE_ORDER.forEach(function (code) {
+    var chip = document.createElement("span");
+    chip.className = "aw-state-chip on";
+    chip.textContent = code;
+    chip.title = STATE_NAMES[code];
+    chip.dataset.code = code;
+    chip.addEventListener("click", function () {
+      var idx = awSelectedStates.indexOf(code);
+      if (idx >= 0) { awSelectedStates.splice(idx, 1); chip.classList.remove("on"); }
+      else { awSelectedStates.push(code); chip.classList.add("on"); }
+      renderAdWindow();
+    });
+    awChipsEl.appendChild(chip);
+  });
+  document.getElementById("awStateAll").addEventListener("click", function () {
+    awSelectedStates = STATE_ORDER.slice();
+    awChipsEl.querySelectorAll(".aw-state-chip").forEach(function (c) { c.classList.add("on"); });
+    renderAdWindow();
+  });
+  document.getElementById("awStateNone").addEventListener("click", function () {
+    awSelectedStates = [];
+    awChipsEl.querySelectorAll(".aw-state-chip").forEach(function (c) { c.classList.remove("on"); });
+    renderAdWindow();
+  });
+
+  renderHero();
+  renderTabs();
+  renderChart();
+  renderAdWindow();
+  window.addEventListener("resize", function () { renderChart(); renderAdWindow(); });
+})();
+</script>
+</body>
+</html>
