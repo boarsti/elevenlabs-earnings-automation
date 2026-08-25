@@ -343,7 +343,7 @@
             <p id="thisWeekEur" class="text-xl font-medium font-num" style="white-space: nowrap;">—</p>
             <span id="thisWeekPct" class="text-xs font-num font-semibold"></span>
           </div>
-          <p id="thisWeekEurPrev" class="text-xl font-medium font-num muted" style="white-space: nowrap;">&nbsp;</p>
+          <p id="thisWeekEurPrev" class="text-xl font-medium font-num" style="white-space: nowrap;">&nbsp;</p>
         </div>
       </div>
       <div id="cardMonth" class="card p-3">
@@ -353,7 +353,7 @@
         </div>
         <div class="flex justify-between items-baseline mt-0.5">
           <p id="thisMonthEur" class="text-xl font-medium font-num">—</p>
-          <p id="thisMonthEurPrev" class="text-xl font-medium font-num muted">&nbsp;</p>
+          <p id="thisMonthEurPrev" class="text-xl font-medium font-num">&nbsp;</p>
         </div>
       </div>
       <div id="cardYear" class="card p-3">
@@ -363,7 +363,7 @@
         </div>
         <div class="flex justify-between items-baseline mt-0.5">
           <p id="thisYearEur" class="text-xl font-medium font-num">—</p>
-          <p id="thisYearEurPrev" class="text-xl font-medium font-num muted">&nbsp;</p>
+          <p id="thisYearEurPrev" class="text-xl font-medium font-num">&nbsp;</p>
         </div>
       </div>
     </section>
@@ -1473,7 +1473,11 @@ function render(data) {
     data.lastWeekEurDirect !== null && data.lastWeekEurDirect !== undefined
       ? fmtEur(data.lastWeekEurDirect)
       : "—";
-  applyTrendText("thisWeekEurPrev", data.lastWeekEurDirect !== null && data.lastWeekEurDirect !== undefined
+  // Nutzer-Korrektur 26.08.2026: Trendfarbe gehoert auf den AKTUELLEN Wert (links,
+  // orange bei Steigerung/blau bei Verschlechterung ggue. der Vorwoche), nicht auf
+  // den Vergleichswert rechts - der bleibt immer neutral/weiss (siehe HTML: "muted"-
+  // Klasse dort entfernt).
+  applyTrendText("thisWeekEur", data.lastWeekEurDirect !== null && data.lastWeekEurDirect !== undefined
     ? data.thisWeekEur - data.lastWeekEurDirect : null);
   // Nutzer-Anforderung 25.08.2026: statt generischer Begriffe ("Dieser Monat" /
   // "Vormonat") den konkreten Monatsnamen + Jahr zeigen ("August'26 bis jetzt" /
@@ -1493,7 +1497,7 @@ function render(data) {
     data.lastMonthEur !== null && data.lastMonthEur !== undefined
       ? fmtEur(data.lastMonthEur)
       : "—";
-  applyTrendText("thisMonthEurPrev", data.lastMonthEur !== null && data.lastMonthEur !== undefined
+  applyTrendText("thisMonthEur", data.lastMonthEur !== null && data.lastMonthEur !== undefined
     ? data.thisMonthEur - data.lastMonthEur : null);
   document.getElementById("thisYearEur").textContent = fmtEur(data.thisYearEur);
   // Nutzer-Korrektur 21.08.2026: "nicht 'Vergleich 2025 bis heute' sondern 'Vergleich
@@ -1511,7 +1515,7 @@ function render(data) {
     data.lastYearEurSamePeriod !== null && data.lastYearEurSamePeriod !== undefined
       ? fmtEur(data.lastYearEurSamePeriod)
       : "—";
-  applyTrendText("thisYearEurPrev", data.lastYearEurSamePeriod !== null && data.lastYearEurSamePeriod !== undefined
+  applyTrendText("thisYearEur", data.lastYearEurSamePeriod !== null && data.lastYearEurSamePeriod !== undefined
     ? data.thisYearEur - data.lastYearEurSamePeriod : null);
 
   // Bugfix 24.08.2026: hier gehoert der %-Vergleich der ABGERECHNETEN EUR-Wochen
