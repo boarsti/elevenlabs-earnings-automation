@@ -25,7 +25,33 @@ function doGet(e) {
   if (e?.parameter?.action === "triggerCollector") {
     return triggerCollectorWorkflow();
   }
+  // Separater Endpunkt statt Teil von computeSummary() (Nutzer-Anforderung 25.08.2026:
+  // "Stimmen-Auswertungen sichtbar machen"), damit der Haupt-Payload (bei jedem
+  // Dashboard-Refresh) nicht um diese seltener gebrauchten Zeilen waechst - gleiche
+  // Lesbarkeits-/Autorisierungslogik (ACCESS_TOKEN), nur separat abrufbar.
+  if (e?.parameter?.action === "voiceEarnings") {
+    return jsonResponse(computeVoiceEarnings(), 200);
+  }
   return jsonResponse(computeSummary(), 200);
+}
+
+// Rohdaten aus VoiceEarningsDaily (befuellt vom separaten Voice-Earnings-Collector,
+// siehe .github/workflows/collect-voice-earnings.yml) - Aggregation nach Monat/Stimme
+// passiert clientseitig im Dashboard, analog zu Daily/WeeklyHistory.
+function computeVoiceEarnings() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const rows = readVoiceEarningsRows(ss);
+  return {
+    rows: rows
+      .filter((r) => r.Datum && r.VoiceId)
+      .map((r) => ({
+        datum: r.Datum,
+        voiceId: r.VoiceId,
+        stimme: r.Stimme,
+        usd: Number(r.USD || 0),
+        characters: Number(r.Characters || 0),
+      })),
+  };
 }
 
 // Kernberechnung, aus doGet() herausgezogen (Nutzer-Anforderung 20.08.2026: woechentlicher
@@ -116,7 +142,7 @@ function computeSummary() {
   const yearlyAgg = buildPeriodAggregate(weekly, 4);
   const currentYear = String(new Date().getFullYear());
   const thisYearEur = (yearlyAgg.find((y) => y.year === currentYear) || {}).eur || 0;
-  const lastYearEurSamePeriod = computeLastYearSamePeriodEur(weekly, todayIso);
+  const lastYearSamePeriod = computeLastYearSamePeriodEur(weekly, todayIso);
   const monthlyAgg = buildPeriodAggregate(weekly, 7);
   const currentMonthKey = todayIso.slice(0, 7);
   const thisMonthEur = (monthlyAgg.find((m) => m.month === currentMonthKey) || {}).eur || 0;
@@ -127,6 +153,22 @@ function computeSummary() {
   const periodStartedToday = thisWeekStartIso === todayIso;
   const avgDailyUsd = periodStartedToday ? null : Number(todayRow?.DurchschnittUSD_Woche || 0);
   const nextReadoutEstimate = estimateNextReadout(weekly);
+  const thisWeekEur = weeklySorted.length ? weeklySorted[weeklySorted.length - 1].eur : 0;
+  const lastWeekEurDirect = weeklySorted.length >= 2 ? weeklySorted[weeklySorted.length - 2].eur : null;
+  // Bugfix 24.08.2026 (Nutzer-Feedback: "▲637,6% ggü. Vorwoche" bei der "EUR / letzte
+  // Abrechnung"-Karte passt zu keinem der beiden dort sichtbaren Werte): das Dashboard
+  // zeigte in dieser Karte bisher data.thisWeekVsLastWeekPct (= weekOverWeek.pct) an.
+  // Dieser Wert vergleicht aber den LIVE laufenden USD-Wochenstand (thisWeekUsdNet,
+  // "Diese Woche" in Feld2) mit dem USD-Wochenstand der Vorwoche zum gleichen relativen
+  // Zeitpunkt (lastWeekUsdSameOffset, "Vorwoche gleicher Zeitraum" in Feld2) - eine ganz
+  // andere Groesse als die hier gezeigte ABGERECHNETE EUR-Auszahlung (thisWeekEur vs.
+  // lastWeekEurDirect). Exakt dasselbe Problem wurde im Email-Report bereits am
+  // 21.08.2026 erkannt und dort direkt aus den Auszahlungszeilen behoben (siehe
+  // weekEurDelta in sendWeeklyReportEmail) - dieser Fix fehlte nur noch im Dashboard.
+  // thisWeekVsLastWeekPct bleibt unveraendert bestehen, da lastWeekUsdSameOffset/
+  // lastWeekAvgDailyUsd (aus demselben weekOverWeek()-Aufruf) weiterhin fuer Feld2
+  // ("Vorwoche gleicher Zeitraum") gebraucht werden.
+  const thisWeekEurVsLastWeekPct = lastWeekEurDirect ? round2(((thisWeekEur - lastWeekEurDirect) / lastWeekEurDirect) * 100) : null;
   const payload = {
     readoutTimeWeekly: status.readoutTimeWeekly || "",
     nextReadoutEstimateIso: nextReadoutEstimate ? new Date(nextReadoutEstimate.estimateMs).toISOString() : "",
@@ -135,13 +177,19 @@ function computeSummary() {
     sinceAnchorIso: sinceAnchorIso || "",
     thisWeekUsdNet: round2(thisWeekUsdNet),
     avgDailyUsd: avgDailyUsd === null ? null : round2(avgDailyUsd),
-    thisWeekEur: weeklySorted.length ? weeklySorted[weeklySorted.length - 1].eur : 0,
-    lastWeekEurDirect: weeklySorted.length >= 2 ? weeklySorted[weeklySorted.length - 2].eur : null,
+    thisWeekEur: thisWeekEur,
+    lastWeekEurDirect: lastWeekEurDirect,
     thisWeekVsLastWeekPct: weekOverWeek ? weekOverWeek.pct : null,
+    thisWeekEurVsLastWeekPct: thisWeekEurVsLastWeekPct,
     lastWeekUsdSameOffset: weekOverWeek ? weekOverWeek.lastWeekUsd : null,
     lastWeekAvgDailyUsd: weekOverWeek ? weekOverWeek.lastWeekAvgDailyUsd : null,
     thisYearEur: round2(thisYearEur),
-    lastYearEurSamePeriod: lastYearEurSamePeriod === null ? null : round2(lastYearEurSamePeriod),
+    lastYearEurSamePeriod: lastYearSamePeriod.value === null ? null : round2(lastYearSamePeriod.value),
+    // Nutzer-Anforderung 24.08.2026: Dashboard soll den tatsaechlich genutzten
+    // (wochentagsgleichen) Cutoff im Label zeigen statt selbst einen eigenen,
+    // nicht wochentagsgleichen "heute -1 Kalenderjahr"-Tag zu berechnen - siehe
+    // computeLastYearSamePeriodEur() oben.
+    lastYearSamePeriodCutoffIso: lastYearSamePeriod.cutoffIso,
     fxRateUsdEur: Number(todayRow?.FXRate_USD_EUR || 0),
     thisMonthEur: round2(thisMonthEur),
     lastMonthEur: lastMonthEur === null ? null : round2(lastMonthEur),
@@ -224,6 +272,9 @@ function readWeeklyRows(ss) {
     }
     return obj;
   });
+}
+function readVoiceEarningsRows(ss) {
+  return readSheetAsObjects(ss, "VoiceEarningsDaily", normalizeDate);
 }
 function readSheetAsObjects(ss, sheetName, normalize) {
   const sheet = ss.getSheetByName(sheetName);
@@ -359,20 +410,35 @@ function computeWeekOverWeek(daily, weeklySorted, todayIso, intradaySorted) {
 // praezise Label haette sonst eine ungenauere Zahl daneben stehen gehabt (zu hoch,
 // weil spaetere August-Tage des Vorjahrs mitgezaehlt wurden, die 2026 noch gar nicht
 // erreicht sind). Jetzt Tag-genauer "MM-DD"-String-Vergleich.
+// Bugfix 24.08.2026 (Nutzer-Feedback: Vorjahresvergleich sollte wie beim Tages-/
+// Wochen-Chart in buildDayCompare()/buildWeekChartData() (html-dashboard/index.html)
+// wochentagsgleich sein, nicht kalendertaggleich - z.B. Mo 24.08.2026 gegen den
+// exakten Kalendertag 24.08.2025 vergleicht einen Montag mit einem Sonntag, waehrend
+// Mo 24.08.2026 gegen Mo 25.08.2025 tatsaechlich vergleichbare Wochentage sind).
+// Nutzt dieselbe "-364 Tage (52 Wochen)"-Technik: garantiert denselben Wochentag,
+// unabhaengig von Schaltjahren, weil sie auf Tage-Modulo-7 statt auf
+// Kalenderjahresgrenzen beruht. Der Summationszeitraum bleibt konzeptionell
+// unveraendert ("1.1. des Vorjahres bis zum Cutoff") - nur der Cutoff-Tag selbst
+// verschiebt sich um bis zu wenige Tage, damit er wochentagsgleich ist. Gibt
+// zusaetzlich das tatsaechlich genutzte Cutoff-Datum zurueck, damit das
+// Dashboard-Label ("Vergleich zu ...") den echten Stichtag zeigt statt selbst
+// einen eigenen, nicht wochentagsgleichen "heute -1 Kalenderjahr"-Tag zu berechnen.
 function computeLastYearSamePeriodEur(weekly, todayIso) {
-  const lastYear = String(Number(todayIso.slice(0, 4)) - 1);
-  const cutoffMonthDay = todayIso.slice(5); // "MM-DD"
+  const cutoffDate = new Date(todayIso + "T00:00:00Z");
+  cutoffDate.setUTCDate(cutoffDate.getUTCDate() - 364);
+  const cutoffIso = cutoffDate.toISOString().slice(0, 10);
+  const cutoffYear = cutoffIso.slice(0, 4);
   let sum = 0;
   let found = false;
   weekly.forEach((r) => {
     if (!r.DatumIso) return;
     const berlinDate = Utilities.formatDate(new Date(r.DatumIso), "Europe/Berlin", "yyyy-MM-dd");
-    if (berlinDate.slice(0, 4) === lastYear && berlinDate.slice(5) <= cutoffMonthDay) {
+    if (berlinDate.slice(0, 4) === cutoffYear && berlinDate <= cutoffIso) {
       sum += Number(r.BetragEUR || 0);
       found = true;
     }
   });
-  return found ? sum : null;
+  return { value: found ? sum : null, cutoffIso };
 }
 // Schaetzt den naechsten Ablesezeitpunkt aus der Drift der letzten Auszahlungen
 // (Nutzer-Anforderung 21.08.2026, nach gemeinsamer Analyse aller Ablesezeitpunkte
@@ -442,6 +508,12 @@ function buildDailyHistoryWithBackfill(daily) {
     .map((r) => ({
       date: r.Datum,
       usd: Number(r.GesamtwertUSD || 0),
+      // Taeglicher USD/EUR-Kurs, vom Collector bereits pro Zeile erfasst (siehe
+      // collect.js getUsdToEurRate()) - bisher nur fuer den HEUTIGEN Wert (status.
+      // fxRateUsdEur) ausgeliefert, jetzt zusaetzlich als Historie fuer die Kurs-
+      // Sparkline im Dashboard-Header (Nutzer-Anforderung 25.08.2026: "Welle, die
+      // den Dollarkurs der letzten 10 Tage abbildet").
+      fxRate: Number(r.FXRate_USD_EUR || 0),
       rawTagesumsatzUsd: r.TagesumsatzUSD === "" || r.TagesumsatzUSD === undefined ? null : Number(r.TagesumsatzUSD),
       // Markiert den Rollover-Tag (Wochenanfang) - direkt aus der Spalte, die der
       // Collector nur an genau diesem einen Tag pro Woche befuellt. Frontend-Bedarf
@@ -458,7 +530,7 @@ function buildDailyHistoryWithBackfill(daily) {
       const delta = d.usd - sorted[i - 1].usd;
       if (delta >= 0) tagesumsatzUsd = round2(delta);
     }
-    return { date: d.date, usd: d.usd, tagesumsatzUsd: tagesumsatzUsd, isWeekAnchor: d.isWeekAnchor };
+    return { date: d.date, usd: d.usd, fxRate: d.fxRate, tagesumsatzUsd: tagesumsatzUsd, isWeekAnchor: d.isWeekAnchor };
   });
 }
 

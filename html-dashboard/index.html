@@ -46,6 +46,42 @@
   .font-num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
   .range-btn { transition: background-color 0.15s ease, color 0.15s ease; }
   .range-btn.bg-amber { box-shadow: 0 2px 8px rgba(255, 138, 31, 0.35); }
+  /* Eigene Klasse statt .range-btn fuer die Stimmen-Zeitraum-Buttons (Monat/2025/2026/
+     Gesamt) - Verwechslungsgefahr behoben (25.08.2026): updateChart() durchsucht
+     document.querySelectorAll(".range-btn") global und haette sonst versehentlich
+     auch diese Buttons erfasst und ihnen bg-amber/text-white bei jedem Tick wieder
+     entzogen, weil sie kein "data-range"-Attribut tragen. */
+  .voice-scope-btn { transition: background-color 0.15s ease, color 0.15s ease; }
+  .voice-scope-btn.bg-amber { box-shadow: 0 2px 8px rgba(255, 138, 31, 0.35); }
+  /* Einheitliche, deutlich sichtbare Pfeil-Navigation (Nutzer-Feedback 25.08.2026:
+     "die Pfeile rechts und links sind auf der gesamten Seite zu unscheinbar und zu
+     klein") - rundes Pillenfeld statt nur eines duennen Glyphen in gedaempftem Grau,
+     fuer Balkendiagramm-Navigation UND die Monats-Navigation im Nutzungsdaten-Tab. */
+  .nav-arrow {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+    background: rgba(120, 130, 180, 0.14); color: var(--text);
+    font-size: 18px; line-height: 1; transition: background-color 0.15s ease, color 0.15s ease;
+  }
+  .nav-arrow:hover { background: rgba(255, 138, 31, 0.22); color: #FF8A1F; }
+  /* Registerlaschen-Optik "wie in Browsern" (Nutzer-Anforderung 25.08.2026) fuer den
+     Details-Tab-Strip (Auszahlungen/Stimmen/Ferienradar/News). Trick: der Strip hat
+     eine durchgehende Trennlinie (border-bottom), der aktive Tab bekommt exakt die
+     Panel-Hintergrundfarbe als eigenen border-bottom - das "loescht" die Trennlinie
+     optisch genau unter dem aktiven Tab und erzeugt den Eindruck, er sei mit dem
+     Panel darunter verschmolzen (klassische Tab-Technik, kein Framework noetig). */
+  .tab-strip { display: flex; gap: 2px; border-bottom: 1px solid var(--card-border); }
+  .tab-strip-btn {
+    appearance: none; background: rgba(120, 130, 180, 0.1); color: var(--muted);
+    border: 1px solid var(--card-border); border-bottom: none;
+    border-radius: 8px 8px 0 0; padding: 7px 16px; font-size: 0.875rem;
+    font-weight: 500; cursor: pointer; position: relative; top: 1px;
+  }
+  .tab-strip-btn:hover { color: var(--text); }
+  .tab-strip-btn.active {
+    background: var(--card-bg); color: #FF8A1F; font-weight: 700;
+    border-color: var(--card-border); border-bottom: 1px solid var(--card-bg);
+  }
   /* Label-links/Wert-rechts-Zeilenschema fuer die Karten-Unterzeilen (Nutzer-
      Anforderung 21.08.2026: "Text vorne Zeile fuer Zeile linksbuendig ... rechts
      dann auch rechtsbuendig" - vorher war jede Zeile ein einzelner zentrierter
@@ -158,17 +194,30 @@
            stehen, die Kurve ist vergleichsweise unwichtig") - per CSS "order" statt
            DOM-Verschiebung getauscht, damit die riesige Logo-Base64-Zeile dazwischen
            unangetastet bleibt. -->
-      <div class="relative flex items-center gap-2 justify-self-end" style="order:3;">
-        <svg id="trendSparkline" width="70" height="22" viewBox="0 0 90 26"></svg>
-        <span id="trendArrow" class="text-sm font-num font-semibold"></span>
-        <button id="insightsInfoBtn" class="text-sm muted" style="line-height:1;" title="Details zum Trend">ⓘ</button>
-        <div id="insightsPopover" class="hidden card p-4 text-left text-sm" style="position:absolute; top:26px; right:0; width:320px; max-width:85vw; z-index:20;">
-          <p class="font-display font-bold mb-2 text-xs muted">Wahrscheinliche Muster (statistisch, keine Garantie)</p>
-          <ul id="insightsList" class="space-y-1.5"></ul>
-          <div class="mt-3 pt-2" style="border-top:1px solid var(--card-border);">
-            <p class="text-xs muted mb-1">Notiz zur aktuellen Woche:</p>
-            <p id="insightsNoteText" class="text-xs mb-1">—</p>
-            <button id="insightsNoteEditBtn" class="text-xs" style="color:#3355FF;">Notiz bearbeiten</button>
+      <div class="relative flex flex-col items-end gap-1 justify-self-end" style="order:3;">
+        <!-- Kurs-Sparkline (Nutzer-Anforderung 25.08.2026): gleiche Optik wie die
+             Umsatz-Sparkline darunter, aber IMMER blau (kein Auf/Ab-Farbwechsel wie
+             beim Umsatztrend) - ein steigender/fallender Kurs ist an sich weder
+             gut noch schlecht, nur eine Information. Eigene Zeile OBERHALB der
+             Umsatz-Sparkline (Nutzer-Korrektur 25.08.2026: "muss unter der vorigen
+             Welle... stehen" - gemeint war die Kurs-Welle UNTER dem Titel/Datum-
+             Bereich, ueber der bestehenden Trend-Welle). -->
+        <div class="flex items-center gap-2">
+          <svg id="fxSparkline" width="70" height="22" viewBox="0 0 90 26" title="USD/EUR-Kurs, letzte 10 Tage"></svg>
+          <span id="fxTrendArrow" class="text-sm font-num font-semibold" style="color:#3355FF;"></span>
+        </div>
+        <div class="flex items-center gap-2">
+          <svg id="trendSparkline" width="70" height="22" viewBox="0 0 90 26"></svg>
+          <span id="trendArrow" class="text-sm font-num font-semibold"></span>
+          <button id="insightsInfoBtn" class="text-sm muted" style="line-height:1;" title="Details zum Trend">ⓘ</button>
+          <div id="insightsPopover" class="hidden card p-4 text-left text-sm" style="position:absolute; top:52px; right:0; width:320px; max-width:85vw; z-index:20;">
+            <p class="font-display font-bold mb-2 text-xs muted">Wahrscheinliche Muster (statistisch, keine Garantie)</p>
+            <ul id="insightsList" class="space-y-1.5"></ul>
+            <div class="mt-3 pt-2" style="border-top:1px solid var(--card-border);">
+              <p class="text-xs muted mb-1">Notiz zur aktuellen Woche:</p>
+              <p id="insightsNoteText" class="text-xs mb-1">—</p>
+              <button id="insightsNoteEditBtn" class="text-xs" style="color:#3355FF;">Notiz bearbeiten</button>
+            </div>
           </div>
         </div>
       </div>
@@ -204,11 +253,18 @@
           <span id="sinceYesterdayVsLastYearLabel" class="info-label muted">&nbsp;</span>
           <span id="sinceYesterdayVsLastYear" class="info-value muted">&nbsp;</span>
         </div>
-        <!-- Platzhalterzeilen, damit Feld1 optisch dieselbe Hoehe wie Feld2 hat und
-             die Zeilen ueber alle drei Karten hinweg auf gleicher Hoehe liegen
-             (Nutzer-Anforderung 21.08.2026: "Feld1 bis Feld2 in der Horizontalen
-             optisch miteinander ausrichten"). -->
-        <p class="text-xs muted font-num mt-0.5" aria-hidden="true">&nbsp;</p>
+        <!-- Prognose heute (Nutzer-Anforderung 24.08.2026): "seit heute" + typischer
+             Rest der letzten gleichen Wochentage ab demselben Zeitversatz - nur
+             verfuegbar, sobald genug dieser Referenztage Intraday-Deckung haben
+             (siehe forecastUsd in computeDayVsRecentSameWeekday()), sonst "—". Nutzt
+             eine der bisherigen Platzhalterzeilen (Nutzer-Anforderung 21.08.2026:
+             "Feld1 bis Feld2 in der Horizontalen optisch miteinander ausrichten") -
+             Zeilenanzahl und damit die Hoehe von Feld1 bleiben unveraendert. -->
+        <div class="info-row text-xs font-num mt-0.5">
+          <span class="info-label muted" title="Hochrechnung aus 'seit heute' + dem typischen Rest der letzten gleichen Wochentage ab demselben Zeitversatz - nur verfuegbar, sobald genug dieser Referenztage Intraday-Deckung haben">Prognose heute (Ø Wochentag)</span>
+          <span id="todayForecast" class="info-value muted">&nbsp;</span>
+        </div>
+        <!-- Verbleibende Platzhalterzeilen fuer die Hoehenausrichtung. -->
         <p class="text-xs muted font-num mt-0.5" aria-hidden="true">&nbsp;</p>
         <p class="text-xs muted font-num mt-0.5" aria-hidden="true">&nbsp;</p>
       </div>
@@ -284,20 +340,20 @@
                nur das kleine Pct-Badge umbricht, nicht der EUR-Wert selbst (Nutzer-
                Feedback 21.08.2026: "IN den EUR-Werten darf kein Zeilenumbruch sein"). -->
           <div class="flex items-baseline gap-2" style="flex-wrap: wrap;">
-            <p id="thisWeekEur" class="text-xl font-semibold font-num" style="white-space: nowrap;">—</p>
+            <p id="thisWeekEur" class="text-xl font-medium font-num" style="white-space: nowrap;">—</p>
             <span id="thisWeekPct" class="text-xs font-num font-semibold"></span>
           </div>
-          <p id="thisWeekEurPrev" class="text-xl font-semibold font-num muted" style="white-space: nowrap;">&nbsp;</p>
+          <p id="thisWeekEurPrev" class="text-xl font-medium font-num muted" style="white-space: nowrap;">&nbsp;</p>
         </div>
       </div>
       <div id="cardMonth" class="card p-3">
         <div class="flex justify-between items-baseline">
-          <p class="text-xs muted font-medium">Dieser Monat (EUR)</p>
-          <p class="text-xs muted font-medium">Vormonat</p>
+          <p id="thisMonthLabel" class="text-xs muted font-medium">Dieser Monat (EUR)</p>
+          <p id="thisMonthEurPrevLabel" class="text-xs muted font-medium">Vormonat</p>
         </div>
         <div class="flex justify-between items-baseline mt-0.5">
-          <p id="thisMonthEur" class="text-xl font-semibold font-num">—</p>
-          <p id="thisMonthEurPrev" class="text-xl font-semibold font-num muted">&nbsp;</p>
+          <p id="thisMonthEur" class="text-xl font-medium font-num">—</p>
+          <p id="thisMonthEurPrev" class="text-xl font-medium font-num muted">&nbsp;</p>
         </div>
       </div>
       <div id="cardYear" class="card p-3">
@@ -306,8 +362,8 @@
           <p id="thisYearEurPrevLabel" class="text-xs muted font-medium">&nbsp;</p>
         </div>
         <div class="flex justify-between items-baseline mt-0.5">
-          <p id="thisYearEur" class="text-xl font-semibold font-num">—</p>
-          <p id="thisYearEurPrev" class="text-xl font-semibold font-num muted">&nbsp;</p>
+          <p id="thisYearEur" class="text-xl font-medium font-num">—</p>
+          <p id="thisYearEurPrev" class="text-xl font-medium font-num muted">&nbsp;</p>
         </div>
       </div>
     </section>
@@ -323,15 +379,24 @@
           <button data-range="total" class="range-btn px-3 py-1 rounded-full">Gesamt</button>
         </div>
       </div>
+      <!-- Legendenhinweis zur Ferienfläche (Nutzer-Feedback 25.08.2026: "Legendenhinweis
+           fehlt unter Button 2026") - bewusst NICHT als echter Legenden-Eintrag (siehe
+           Kommentar bei "legend.labels.filter" in updateChart, dataviz-Prinzip: keine
+           Kontext-Fläche als vollwertige Serie werten), sondern als eigene kleine
+           Erklärzeile, nur in der Jahresansicht sichtbar. -->
+      <p id="holidayAreaHint" class="hidden text-xs muted" style="margin:-4px 0 6px;">
+        <span style="display:inline-block; width:10px; height:10px; background:rgba(154,160,199,0.4); border-radius:2px; vertical-align:middle; margin-right:5px;"></span>
+        Graue Fläche: Bevölkerungsanwesenheit außerhalb Schulferien (Kontext, kein belegter Zusammenhang — siehe Ferienradar unten)
+      </p>
       <div class="flex gap-4" style="height:260px;">
         <div class="flex-1" style="min-width:0; position:relative;">
           <canvas id="historyChart"></canvas>
         </div>
         <div id="dailyBarWrap" class="hidden flex flex-col" style="width:33%; min-width:0;">
           <div class="flex items-center justify-between mb-1">
-            <button id="barChartPrevBtn" class="muted hover:text-white" style="line-height:1; font-size:22px; padding:0 4px;" title="Frühere Werte anzeigen">◂</button>
+            <button id="barChartPrevBtn" class="nav-arrow" title="Frühere Werte anzeigen">◂</button>
             <p id="dailyBarTitle" class="text-xs muted" style="text-align:center; flex:1;">Tagesumsatz (diese Woche)</p>
-            <button id="barChartNextBtn" class="muted hover:text-white" style="line-height:1; font-size:22px; padding:0 4px;" title="Zurück zu aktuellen Werten">▸</button>
+            <button id="barChartNextBtn" class="nav-arrow" title="Zurück zu aktuellen Werten">▸</button>
           </div>
           <div style="position:relative; flex:1; min-height:0;">
             <canvas id="dailyBarChart"></canvas>
@@ -340,34 +405,36 @@
       </div>
     </section>
 
+    <!-- Vereinheitlichte Details-Karte (Nutzer-Anforderung 25.08.2026): vorher zwei
+         getrennte Karten ("Alle Auszahlungen" mit internen Auszahlungen/News/Stimmen-
+         Tabs, plus eine eigene, immer sichtbare Ferienradar-Zeile) - jetzt EINE
+         Karte mit vier gleichrangigen Registerlaschen im typischen Browser-Tab-Stil
+         (siehe .tab-strip/.tab-strip-btn), IMMER sichtbar/aufgeklappt (Nutzer-
+         Korrektur 25.08.2026: kein Ein-/Ausklapp-Mechanismus mehr, keine "Details"-
+         Ueberschrift - die Tabs sprechen fuer sich). Reihenfolge wie vom Nutzer
+         vorgegeben: Ferienradar (Default-Tab), Auszahlungen, Nutzungsdaten, News -
+         bewusst ohne Emojis in den Tab-Labels (Nutzer-Anforderung 25.08.2026). -->
     <section class="card p-3">
-      <div class="w-full flex items-center justify-between">
-        <button id="payoutToggle" class="flex-1 flex items-center justify-between text-left">
-          <h2 class="font-display font-bold">Alle Auszahlungen</h2>
-          <span id="payoutToggleLabel" class="muted text-sm font-medium">▸ anzeigen</span>
-        </button>
-        <div class="flex items-center gap-3 ml-3">
-          <!-- Tabs statt eigener Seite (Nutzer-Entscheidung 20.08.2026: "dann bleiben
-               wir auf der Seite und wechseln nicht") - News zeigen sich anstelle der
-               Auszahlungen im selben Feld, kein Seitenwechsel noetig. -->
-          <button id="tabPayoutsBtn" class="text-sm font-medium" style="color:#FF8A1F;">Auszahlungen</button>
-          <button id="tabNewsBtn" class="muted text-sm font-medium hover:text-white" style="position:relative;">
-            📰 News
-            <!-- Ungelesen-Badge (Nutzer-Anforderung 21.08.2026, eigener Vorschlag umgesetzt):
-                 Punkt erscheint, sobald es News gibt, die neuer sind als der zuletzt in
-                 localStorage vermerkte Besuchszeitpunkt des News-Tabs. -->
-            <span id="newsUnreadBadge" class="hidden" style="position:absolute; top:-2px; right:-6px; width:8px; height:8px; border-radius:50%; background:#FF8A1F;"></span>
-          </button>
-          <!-- Steuerlicher/unabhängiger Nachweis (Nutzer-Feedback 20.08.2026): erzeugt
-               eine herunterladbare, datierte CSV-Momentaufnahme aller Auszahlungen -
-               unabhängig von Google/ElevenLabs archivierbar. Rein clientseitig (Blob +
-               <a download>), kein Server beteiligt. Eigener Button statt verschachtelt
-               im Toggle-Button, sonst würde ein Klick beides gleichzeitig auslösen. -->
+       <div class="tab-strip" role="tablist">
+         <button id="tabFerienBtn" class="tab-strip-btn active" role="tab">Ferienradar</button>
+         <button id="tabPayoutsBtn" class="tab-strip-btn" role="tab">Auszahlungen</button>
+         <button id="tabVoicesBtn" class="tab-strip-btn" role="tab">Nutzungsdaten</button>
+         <button id="tabNewsBtn" class="tab-strip-btn" role="tab" style="position:relative;">
+           News
+           <!-- Ungelesen-Badge (Nutzer-Anforderung 21.08.2026, eigener Vorschlag umgesetzt):
+                Punkt erscheint, sobald es News gibt, die neuer sind als der zuletzt in
+                localStorage vermerkte Besuchszeitpunkt des News-Tabs. -->
+           <span id="newsUnreadBadge" class="hidden" style="position:absolute; top:3px; right:6px; width:7px; height:7px; border-radius:50%; background:#FF8A1F;"></span>
+         </button>
+       </div>
+       <div id="payoutsView" class="hidden mt-3">
+        <!-- Steuerlicher/unabhängiger Nachweis (Nutzer-Feedback 20.08.2026): erzeugt
+             eine herunterladbare, datierte CSV-Momentaufnahme aller Auszahlungen -
+             unabhängig von Google/ElevenLabs archivierbar. Rein clientseitig (Blob +
+             <a download>), kein Server beteiligt. -->
+        <div class="flex justify-end mb-1">
           <button id="csvExportBtn" class="muted text-sm font-medium hover:text-white" title="Alle Auszahlungen als CSV-Datei herunterladen (für Steuerunterlagen/Backup)">⬇ CSV</button>
         </div>
-      </div>
-      <div id="payoutContent" class="hidden mt-3">
-       <div id="payoutsView">
         <!-- Beide Tabellen scrollen unabhängig voneinander (max-h + overflow-y-auto) -
              das war bisher optisch nicht erkennbar, beide sahen wie eine durchgehende
              Fläche aus (Nutzer-Feedback 20.08.2026: "faktisch nicht zu erkennen").
@@ -392,7 +459,7 @@
           </table>
         </div>
        </div>
-       <div id="newsView" class="hidden">
+       <div id="newsView" class="hidden mt-3">
         <p class="text-xs muted mb-1 leading-relaxed">
           Automatisch gesammelt (täglich, RSS) und ins Deutsche übersetzt, ergänzt um
           manuell recherchierte, quellenbelegte historische Ereignisse. Dieselben
@@ -403,86 +470,289 @@
           <div id="newsListBody"></div>
         </div>
        </div>
-      </div>
+       <!-- Stimmen-Auswertung (Nutzer-Anforderung 25.08.2026): Characters-Nutzungsvolumen
+            je Stimmklon, waehl- und umschaltbar zwischen Monat/2025/2026/Gesamt, separat
+            vom Haupt-Collector befuellt (1x taeglich nach 22 Uhr, siehe
+            collectVoiceEarnings.js). KEINE USD-Spalte/-Kennzahl mehr (Nutzer-Korrektur
+            25.08.2026, nach Datenabgleich): ElevenLabs' "Total Earnings" auf der
+            Analytics-Seite laesst sich NICHT verlaesslich in echte EUR-Auszahlungen
+            umrechnen (impliziter Kurs schwankte beim Abgleich mit den echten woechent-
+            lichen Auszahlungen zwischen 0,43 und 1,28 - unmoeglich fuer einen echten
+            USD/EUR-Kurs) - Characters ist die einzige verlaessliche Kennzahl hier. -->
+       <div id="voicesView" class="hidden mt-3">
+        <p class="text-xs muted mb-2 leading-relaxed">
+          Characters (Nutzungsvolumen) je Stimmklon. Separater Collector, läuft 1x
+          täglich nach 22 Uhr - kann bei einem neuen Monat bis zu 24h nachlaufen.
+        </p>
+        <div class="flex items-center gap-2 mb-2 flex-wrap">
+          <button id="voiceScopeMonth" class="voice-scope-btn px-3 py-1 rounded-full bg-amber text-white" data-voice-scope="month">Monat</button>
+          <button id="voiceScope2025" class="voice-scope-btn px-3 py-1 rounded-full" data-voice-scope="2025">2025</button>
+          <button id="voiceScope2026" class="voice-scope-btn px-3 py-1 rounded-full" data-voice-scope="2026">2026</button>
+          <button id="voiceScopeAll" class="voice-scope-btn px-3 py-1 rounded-full" data-voice-scope="all">Gesamt</button>
+        </div>
+        <!-- Zweispaltiges Layout fuer Jahres-/Gesamt-Scopes (Nutzer-Anforderung
+             25.08.2026, "gemaess Muster von oben rechts" - siehe Verlauf-Sektion mit
+             Linienchart links/Balken rechts): links 2/3 Koordinatensystem mit 5
+             farbigen Linien (eine je Stimme, Jan-Dez bzw. voller Zeitraum seit Beginn),
+             rechts 1/3 die Rangliste. Im Monats-Scope bleibt nur die Rangliste (volle
+             Breite) - ein Liniendiagramm fuer einen einzelnen Monat waere nicht sinnvoll. -->
+        <div class="flex gap-4">
+         <div id="voiceChartWrap" class="hidden" style="flex:1; min-width:0; position:relative; height:280px;">
+           <canvas id="voiceLineChart"></canvas>
+         </div>
+         <div id="voiceTableCol" style="width:100%; min-width:0;">
+          <div id="voiceMonthNav" class="flex items-center justify-between mb-2">
+            <button id="voiceMonthPrev" class="nav-arrow" title="Vormonat">◂</button>
+            <span id="voiceMonthLabel" class="text-sm font-semibold font-num">–</span>
+            <button id="voiceMonthNext" class="nav-arrow" title="Folgemonat">▸</button>
+          </div>
+          <div id="voicesEmptyState" class="hidden text-sm muted" style="padding:12px 4px;">
+            Noch keine Daten.
+          </div>
+          <div id="voicesTableWrap" class="max-h-96 overflow-y-auto rounded-lg" style="border:1px solid var(--card-border); background:rgba(0,0,0,0.15); box-shadow: inset 0 0 8px rgba(0,0,0,0.25); padding:0 8px;">
+            <table class="w-full text-sm" style="table-layout:fixed;">
+              <colgroup>
+                <col>
+                <col style="width:170px;">
+                <col style="width:70px;">
+              </colgroup>
+              <thead class="muted text-left sticky top-0" style="background:var(--card-bg)">
+                <tr><th class="py-1">Stimme</th><th class="text-right pr-3">Characters</th><th class="text-right">% Anteil</th></tr>
+              </thead>
+              <tbody id="voicesTableBody"></tbody>
+            </table>
+          </div>
+          <!-- Kennzahlen ueber den GESAMTEN verfuegbaren Zeitraum (unabhaengig vom
+               gewaehlten Scope oben) - Nutzer-Anforderung 25.08.2026: "Ø/Tag gesamt,
+               Ø/Monat gesamt" (auf Characters umgestellt, siehe Kommentar oben). -->
+          <div class="mt-2 text-xs muted flex gap-4 flex-wrap">
+            <span>Ø Characters/Tag gesamt: <span id="voiceAvgPerDay" class="font-num">–</span></span>
+            <span>Ø Characters/Monat gesamt: <span id="voiceAvgPerMonth" class="font-num">–</span></span>
+          </div>
+         </div>
+        </div>
+       </div>
+       <!-- Ferienradar-Kontext (Nutzer-Anforderung 25.08.2026, urspruenglich eigene
+            Karte, jetzt als vierte Registerlasche): rein informativer Kontext-
+            Baustein, WIE VIELE der 16 Bundeslaender gerade gleichzeitig Schulferien
+            haben - als moeglicher erklaerender Faktor fuer Kampagnen-Timing/
+            Erloesschwankungen. Bewusst NICHT in eine bestehende Berechnung (Feld1-3,
+            Prognosen, Gesamtkurve) verdrahtet - reine Zusatzinfo. Ferien-Termine rein
+            clientseitig, statisch eingebettet (Quelle: KMK-Ferienkalender-PDFs) -
+            kein neuer Endpunkt, kein neues Secret, keine externen Aufrufe. Volle
+            VON/BIS-Werbezeitraum-Analyse (inkl. Chart) liegt im separaten
+            "Ferienradar"-Artifact (Link). -->
+       <div id="ferienView" class="mt-3">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="muted text-sm">
+              <span id="frTodayCount" class="font-num font-semibold text-amber">–</span>
+              von 16 Bundesländern heute in Ferien
+              <span id="frPopPct" class="font-num">&nbsp;</span>
+            </span>
+          </div>
+          <a href="https://claude.ai/code/artifact/cf6b75dd-e53d-40db-a93f-8ac87aadaa3b" target="_blank" rel="noopener" class="muted text-sm font-medium hover:text-white">Werbezeitraum prüfen ↗</a>
+        </div>
+        <div id="frChips" class="flex flex-wrap gap-1.5 mt-2"></div>
+       </div>
     </section>
   </div>
 
-  <!-- Bildschirmschoner/Sperre: aktiviert sich nach 10 Min. Inaktivitaet, PIN-
-       geschuetzt. Datenerfassung/Polling laeuft im Hintergrund unveraendert weiter,
-       das Overlay blendet nur die Anzeige aus. -->
-  <div id="lockOverlay" style="display:none; position:fixed; inset:0; z-index:50; background:var(--bg); align-items:center; justify-content:center;">
-    <div class="card p-8 text-center" style="max-width:320px; width:90%;">
-      <p class="text-4xl mb-3">🔒</p>
-      <p class="font-display font-bold mb-4">Gesperrt</p>
-      <input id="pinInput" type="password" inputmode="numeric" maxlength="8"
-        class="font-num text-center text-2xl w-full mb-3" style="background:var(--bg); border:1px solid var(--card-border); border-radius:10px; padding:10px; color:var(--text);"
-        placeholder="Code" />
-      <button id="unlockBtn" class="bg-amber text-white px-4 py-2 rounded-full font-medium" style="width:100%;">Entsperren</button>
-      <p id="pinError" class="text-xs mt-2" style="color:#B35A0A; min-height:1em;"></p>
-    </div>
-  </div>
+<script>
+// Schulferien-Datenbasis (KMK-Ferienkalender 2024/25-2026/27, verifiziert 25.08.2026 -
+// siehe Ferienradar-Artifact fuer die volle Quellenangabe). Global/top-level statt in
+// einer IIFE, weil sowohl das Ferienradar-Kontext-Widget (Ende dieser Datei) als auch
+// die Ferienflaeche im Jahres-Chart (buildYearCompare/updateChart weiter unten in
+// diesem Script) denselben Datensatz brauchen - eine einzige Quelle statt zweier
+// Kopien, die auseinanderlaufen koennten.
+const FR_DAY_MS = 86400000;
+function frParseISO(s) { return new Date(s + "T00:00:00Z"); }
+function frToISO(d) { return d.toISOString().slice(0, 10); }
+function frAddDays(iso, n) { return frToISO(new Date(frParseISO(iso).getTime() + n * FR_DAY_MS)); }
+function frDayIndex(iso, from) { return Math.round((frParseISO(iso) - frParseISO(from)) / FR_DAY_MS); }
+function frTodayIso() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }).format(new Date()); }
+const FR_MONTHS = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
+const FR_WEEKDAYS = ["So","Mo","Di","Mi","Do","Fr","Sa"];
+function frFmtDate(iso) {
+  const d = frParseISO(iso);
+  return FR_WEEKDAYS[d.getUTCDay()] + " " + String(d.getUTCDate()).padStart(2,"0") + "." + FR_MONTHS[d.getUTCMonth()];
+}
+
+const FR_STATE_NAMES = {
+  BW:"Baden-Württemberg", BY:"Bayern", BE:"Berlin", BB:"Brandenburg",
+  HB:"Bremen", HH:"Hamburg", HE:"Hessen", MV:"Mecklenburg-Vorpommern",
+  NI:"Niedersachsen", NW:"Nordrhein-Westfalen", RP:"Rheinland-Pfalz",
+  SL:"Saarland", SN:"Sachsen", ST:"Sachsen-Anhalt", SH:"Schleswig-Holstein",
+  TH:"Thüringen"
+};
+// Einwohnerzahlen je Bundesland (Stand 2022, per WebFetch am 25.08.2026 verifiziert -
+// aktuellere Destatis-Tabellen fuer 31.12.2024 waren nicht oeffentlich einsehbar,
+// die Verschiebungen ggue. 2024 duerften nur im niedrigen einstelligen Prozentbereich
+// liegen). Fuer die Bevoelkerungs-gewichtete Kennzahl im Ferienradar ("~X% der
+// Bevoelkerung in Ferien" statt nur "X von 16 Laendern") reicht diese Praezision.
+const FR_STATE_POPULATION = {
+  BW: 11124642, BY: 13176989, BE: 3677472, BB: 2537868, HB: 676463,
+  HH: 1853935, HE: 6295017, MV: 1611160, NI: 8027031, NW: 17924591,
+  RP: 4106485, SL: 982348, SN: 4043002, ST: 2169253, SH: 2922005, TH: 2108863
+};
+const FR_TOTAL_POPULATION = Object.values(FR_STATE_POPULATION).reduce((a,b) => a+b, 0);
+
+const FR_PERIODS = [
+["BW","2024-12-23","2025-01-04"],["BW","2025-04-14","2025-04-26"],["BW","2025-06-10","2025-06-20"],
+["BW","2025-07-31","2025-09-13"],["BW","2025-10-27","2025-10-31"],["BW","2025-12-22","2026-01-05"],
+["BW","2026-03-30","2026-04-11"],["BW","2026-05-26","2026-06-05"],["BW","2026-07-30","2026-09-12"],
+["BW","2026-10-26","2026-10-31"],["BW","2026-12-23","2027-01-09"],["BW","2027-03-25","2027-03-25"],
+["BW","2027-03-30","2027-04-03"],["BW","2027-05-18","2027-05-29"],["BW","2027-07-29","2027-09-11"],
+["BY","2024-12-23","2025-01-03"],["BY","2025-03-03","2025-03-07"],["BY","2025-04-14","2025-04-25"],
+["BY","2025-06-10","2025-06-20"],["BY","2025-08-01","2025-08-01"],["BY","2025-08-04","2025-09-15"],
+["BY","2025-11-03","2025-11-07"],["BY","2025-12-22","2026-01-05"],["BY","2026-02-16","2026-02-20"],
+["BY","2026-03-30","2026-04-10"],["BY","2026-05-26","2026-06-05"],["BY","2026-08-03","2026-09-14"],
+["BY","2026-11-02","2026-11-06"],["BY","2026-12-24","2027-01-08"],["BY","2027-02-08","2027-02-12"],
+["BY","2027-03-22","2027-04-02"],["BY","2027-05-18","2027-05-28"],["BY","2027-08-02","2027-09-13"],
+["BE","2024-12-23","2024-12-31"],["BE","2025-02-03","2025-02-08"],["BE","2025-04-14","2025-04-25"],
+["BE","2025-05-02","2025-05-02"],["BE","2025-10-20","2025-11-01"],["BE","2025-12-22","2026-01-02"],
+["BE","2026-02-02","2026-02-07"],["BE","2026-03-30","2026-04-10"],["BE","2026-05-15","2026-05-15"],
+["BE","2026-05-26","2026-05-26"],["BE","2026-07-09","2026-08-22"],["BE","2026-10-19","2026-10-31"],
+["BE","2026-12-23","2027-01-02"],["BE","2027-02-01","2027-02-06"],["BE","2027-03-22","2027-04-02"],
+["BE","2027-05-07","2027-05-07"],["BE","2027-05-18","2027-05-19"],["BE","2027-07-01","2027-08-14"],
+["BB","2024-12-23","2024-12-31"],["BB","2025-02-03","2025-02-08"],["BB","2025-04-14","2025-04-25"],
+["BB","2025-06-10","2025-06-10"],["BB","2025-10-20","2025-11-01"],["BB","2025-12-22","2026-01-02"],
+["BB","2026-02-02","2026-02-07"],["BB","2026-03-30","2026-04-10"],["BB","2026-05-26","2026-05-26"],
+["BB","2026-07-09","2026-08-22"],["BB","2026-10-19","2026-10-30"],["BB","2026-12-23","2027-01-02"],
+["BB","2027-02-01","2027-02-06"],["BB","2027-03-22","2027-04-03"],["BB","2027-05-18","2027-05-18"],
+["BB","2027-07-01","2027-08-14"],
+["HB","2024-12-23","2025-01-04"],["HB","2025-02-03","2025-02-04"],["HB","2025-04-07","2025-04-19"],
+["HB","2025-04-30","2025-04-30"],["HB","2025-05-02","2025-05-02"],["HB","2025-05-30","2025-05-30"],
+["HB","2025-06-10","2025-06-10"],["HB","2025-07-03","2025-08-13"],["HB","2025-10-13","2025-10-25"],
+["HB","2025-12-22","2026-01-05"],["HB","2026-02-02","2026-02-03"],["HB","2026-03-23","2026-04-07"],
+["HB","2026-05-15","2026-05-15"],["HB","2026-05-26","2026-05-26"],["HB","2026-07-02","2026-08-12"],
+["HB","2026-10-12","2026-10-24"],["HB","2026-12-23","2027-01-09"],["HB","2027-02-01","2027-02-02"],
+["HB","2027-03-22","2027-04-03"],["HB","2027-05-07","2027-05-07"],["HB","2027-05-18","2027-05-18"],
+["HB","2027-07-08","2027-08-18"],
+["HH","2024-12-20","2025-01-03"],["HH","2025-01-31","2025-01-31"],["HH","2025-03-10","2025-03-21"],
+["HH","2025-05-02","2025-05-02"],["HH","2025-05-26","2025-05-30"],["HH","2025-07-24","2025-09-03"],
+["HH","2025-10-20","2025-10-31"],["HH","2025-12-17","2026-01-02"],["HH","2026-01-30","2026-01-30"],
+["HH","2026-03-02","2026-03-13"],["HH","2026-05-11","2026-05-15"],["HH","2026-07-09","2026-08-19"],
+["HH","2026-10-19","2026-10-30"],["HH","2026-12-21","2027-01-01"],["HH","2027-01-29","2027-01-29"],
+["HH","2027-03-01","2027-03-12"],["HH","2027-05-07","2027-05-14"],["HH","2027-07-01","2027-08-11"],
+["HE","2024-12-23","2025-01-10"],["HE","2025-04-07","2025-04-21"],["HE","2025-07-07","2025-08-15"],
+["HE","2025-10-06","2025-10-18"],["HE","2025-12-22","2026-01-10"],["HE","2026-03-30","2026-04-10"],
+["HE","2026-06-29","2026-08-07"],["HE","2026-10-05","2026-10-17"],["HE","2026-12-23","2027-01-12"],
+["HE","2027-03-22","2027-04-02"],["HE","2027-06-28","2027-08-06"],
+["MV","2024-12-23","2025-01-06"],["MV","2025-02-03","2025-02-14"],["MV","2025-04-14","2025-04-23"],
+["MV","2025-05-30","2025-05-30"],["MV","2025-06-06","2025-06-10"],["MV","2025-07-28","2025-09-06"],
+["MV","2025-10-02","2025-10-02"],["MV","2025-10-20","2025-10-24"],["MV","2025-11-03","2025-11-03"],
+["MV","2025-12-20","2026-01-03"],["MV","2026-02-09","2026-02-20"],["MV","2026-03-30","2026-04-08"],
+["MV","2026-05-15","2026-05-15"],["MV","2026-05-22","2026-05-26"],["MV","2026-07-13","2026-08-22"],
+["MV","2026-10-15","2026-10-24"],["MV","2026-12-21","2027-01-02"],["MV","2027-02-08","2027-02-19"],
+["MV","2027-03-24","2027-04-02"],["MV","2027-05-07","2027-05-07"],["MV","2027-05-14","2027-05-18"],
+["MV","2027-07-05","2027-08-14"],
+["NI","2024-12-23","2025-01-04"],["NI","2025-02-03","2025-02-04"],["NI","2025-04-07","2025-04-19"],
+["NI","2025-04-30","2025-04-30"],["NI","2025-05-02","2025-05-02"],["NI","2025-05-30","2025-05-30"],
+["NI","2025-06-10","2025-06-10"],["NI","2025-07-03","2025-08-13"],["NI","2025-10-13","2025-10-25"],
+["NI","2025-12-22","2026-01-05"],["NI","2026-02-02","2026-02-03"],["NI","2026-03-23","2026-04-07"],
+["NI","2026-05-15","2026-05-15"],["NI","2026-05-26","2026-05-26"],["NI","2026-07-02","2026-08-12"],
+["NI","2026-10-12","2026-10-24"],["NI","2026-12-23","2027-01-09"],["NI","2027-02-01","2027-02-02"],
+["NI","2027-03-22","2027-04-03"],["NI","2027-05-07","2027-05-07"],["NI","2027-05-18","2027-05-18"],
+["NI","2027-07-08","2027-08-18"],
+["NW","2024-12-23","2025-01-06"],["NW","2025-04-14","2025-04-26"],["NW","2025-06-10","2025-06-10"],
+["NW","2025-07-14","2025-08-26"],["NW","2025-10-13","2025-10-25"],["NW","2025-12-22","2026-01-06"],
+["NW","2026-03-30","2026-04-11"],["NW","2026-05-26","2026-05-26"],["NW","2026-07-20","2026-09-01"],
+["NW","2026-10-17","2026-10-31"],["NW","2026-12-23","2027-01-06"],["NW","2027-03-22","2027-04-03"],
+["NW","2027-05-18","2027-05-18"],["NW","2027-07-19","2027-08-31"],
+["RP","2024-12-23","2025-01-08"],["RP","2025-04-14","2025-04-25"],["RP","2025-07-07","2025-08-15"],
+["RP","2025-10-13","2025-10-24"],["RP","2025-12-22","2026-01-07"],["RP","2026-03-30","2026-04-10"],
+["RP","2026-06-29","2026-08-07"],["RP","2026-10-05","2026-10-16"],["RP","2026-12-23","2027-01-08"],
+["RP","2027-03-22","2027-04-02"],["RP","2027-06-28","2027-08-06"],
+["SL","2024-12-23","2025-01-03"],["SL","2025-02-24","2025-03-04"],["SL","2025-04-14","2025-04-25"],
+["SL","2025-07-07","2025-08-14"],["SL","2025-10-13","2025-10-24"],["SL","2025-12-22","2026-01-02"],
+["SL","2026-02-16","2026-02-20"],["SL","2026-04-07","2026-04-17"],["SL","2026-06-29","2026-08-07"],
+["SL","2026-10-05","2026-10-16"],["SL","2026-12-21","2026-12-31"],["SL","2027-02-08","2027-02-12"],
+["SL","2027-03-30","2027-04-09"],["SL","2027-06-28","2027-08-06"],
+["SN","2024-12-23","2025-01-03"],["SN","2025-02-17","2025-03-01"],["SN","2025-04-18","2025-04-25"],
+["SN","2025-05-30","2025-05-30"],["SN","2025-06-28","2025-08-08"],["SN","2025-10-06","2025-10-18"],
+["SN","2025-12-22","2026-01-02"],["SN","2026-02-09","2026-02-21"],["SN","2026-04-03","2026-04-10"],
+["SN","2026-05-15","2026-05-15"],["SN","2026-07-04","2026-08-14"],["SN","2026-10-12","2026-10-24"],
+["SN","2026-12-23","2027-01-02"],["SN","2027-02-08","2027-02-19"],["SN","2027-03-26","2027-04-02"],
+["SN","2027-05-07","2027-05-07"],["SN","2027-05-15","2027-05-18"],["SN","2027-07-10","2027-08-20"],
+["ST","2024-12-23","2025-01-04"],["ST","2025-01-27","2025-01-31"],["ST","2025-04-07","2025-04-19"],
+["ST","2025-05-30","2025-05-30"],["ST","2025-06-28","2025-08-08"],["ST","2025-10-13","2025-10-25"],
+["ST","2025-12-22","2026-01-05"],["ST","2026-01-31","2026-02-06"],["ST","2026-03-30","2026-04-04"],
+["ST","2026-05-26","2026-05-29"],["ST","2026-07-04","2026-08-14"],["ST","2026-10-19","2026-10-30"],
+["ST","2026-12-21","2027-01-02"],["ST","2027-02-01","2027-02-06"],["ST","2027-03-22","2027-03-27"],
+["ST","2027-05-15","2027-05-22"],["ST","2027-07-10","2027-08-20"],
+["SH","2024-12-19","2025-01-07"],["SH","2025-04-11","2025-04-25"],["SH","2025-05-30","2025-05-30"],
+["SH","2025-07-28","2025-09-06"],["SH","2025-10-20","2025-10-30"],["SH","2025-12-19","2026-01-06"],
+["SH","2026-03-26","2026-04-10"],["SH","2026-05-15","2026-05-15"],["SH","2026-07-04","2026-08-15"],
+["SH","2026-10-12","2026-10-24"],["SH","2026-12-21","2027-01-06"],["SH","2027-03-30","2027-04-10"],
+["SH","2027-05-07","2027-05-07"],["SH","2027-07-03","2027-08-14"],
+["TH","2024-12-23","2025-01-03"],["TH","2025-02-03","2025-02-08"],["TH","2025-04-07","2025-04-19"],
+["TH","2025-05-30","2025-05-30"],["TH","2025-06-28","2025-08-08"],["TH","2025-10-06","2025-10-18"],
+["TH","2025-12-22","2026-01-03"],["TH","2026-02-16","2026-02-21"],["TH","2026-04-07","2026-04-17"],
+["TH","2026-05-15","2026-05-15"],["TH","2026-07-04","2026-08-14"],["TH","2026-10-12","2026-10-24"],
+["TH","2026-12-23","2027-01-02"],["TH","2027-02-01","2027-02-06"],["TH","2027-03-22","2027-04-03"],
+["TH","2027-05-07","2027-05-07"],["TH","2027-07-10","2027-08-20"],
+// Erweiterung 25.08.2026: Schuljahr 2027/28, Primaerquelle KMK-PDF FER2027_28.pdf (Stand 09.10.2025)
+["BW","2027-11-02","2027-11-06"],["BW","2027-12-23","2028-01-08"],["BW","2028-04-13","2028-04-13"],
+["BW","2028-04-18","2028-04-22"],["BW","2028-06-06","2028-06-17"],["BW","2028-07-27","2028-09-09"],
+["BY","2027-11-02","2027-11-05"],["BY","2027-12-24","2028-01-07"],["BY","2028-02-28","2028-03-03"],
+["BY","2028-04-10","2028-04-21"],["BY","2028-06-06","2028-06-16"],["BY","2028-07-31","2028-09-11"],
+["BE","2027-10-11","2027-10-23"],["BE","2027-12-22","2027-12-31"],["BE","2028-01-31","2028-02-05"],
+["BE","2028-04-10","2028-04-22"],["BE","2028-05-26","2028-05-26"],["BE","2028-06-01","2028-06-02"],
+["BE","2028-07-01","2028-08-12"],
+["BB","2027-10-11","2027-10-23"],["BB","2027-12-23","2027-12-31"],["BB","2028-01-31","2028-02-05"],
+["BB","2028-04-10","2028-04-22"],["BB","2028-06-29","2028-08-12"],
+["HB","2027-10-18","2027-10-30"],["HB","2027-12-23","2028-01-08"],["HB","2028-01-31","2028-02-01"],
+["HB","2028-04-10","2028-04-22"],["HB","2028-05-26","2028-05-26"],["HB","2028-06-06","2028-06-06"],
+["HB","2028-07-20","2028-08-30"],
+["HH","2027-10-11","2027-10-22"],["HH","2027-12-20","2027-12-31"],["HH","2028-01-28","2028-01-28"],
+["HH","2028-03-06","2028-03-17"],["HH","2028-05-22","2028-05-26"],["HH","2028-07-03","2028-08-11"],
+["HE","2027-10-04","2027-10-16"],["HE","2027-12-23","2028-01-11"],["HE","2028-04-03","2028-04-14"],
+["HE","2028-07-03","2028-08-11"],
+["MV","2027-10-14","2027-10-23"],["MV","2027-12-22","2028-01-04"],["MV","2028-02-05","2028-02-18"],
+["MV","2028-04-12","2028-04-21"],["MV","2028-05-26","2028-05-26"],["MV","2028-06-02","2028-06-06"],
+["MV","2028-06-26","2028-08-05"],
+["NI","2027-10-16","2027-10-30"],["NI","2027-12-23","2028-01-08"],["NI","2028-01-31","2028-02-01"],
+["NI","2028-04-10","2028-04-22"],["NI","2028-05-26","2028-05-26"],["NI","2028-06-06","2028-06-06"],
+["NI","2028-07-20","2028-08-30"],
+["NW","2027-10-23","2027-11-06"],["NW","2027-12-24","2028-01-08"],["NW","2028-04-10","2028-04-22"],
+["NW","2028-07-10","2028-08-22"],
+["RP","2027-10-04","2027-10-15"],["RP","2027-12-23","2028-01-07"],["RP","2028-04-10","2028-04-21"],
+["RP","2028-07-03","2028-08-11"],
+["SL","2027-10-04","2027-10-15"],["SL","2027-12-20","2027-12-31"],["SL","2028-02-21","2028-02-29"],
+["SL","2028-04-12","2028-04-21"],["SL","2028-07-03","2028-08-11"],
+["SN","2027-10-11","2027-10-23"],["SN","2027-12-23","2028-01-01"],["SN","2028-02-14","2028-02-26"],
+["SN","2028-04-14","2028-04-22"],["SN","2028-05-26","2028-05-26"],["SN","2028-07-22","2028-09-01"],
+["ST","2027-10-18","2027-10-23"],["ST","2027-12-20","2027-12-31"],["ST","2028-02-07","2028-02-12"],
+["ST","2028-04-10","2028-04-22"],["ST","2028-06-03","2028-06-10"],["ST","2028-07-22","2028-09-01"],
+["SH","2027-10-11","2027-10-23"],["SH","2027-12-23","2028-01-08"],["SH","2028-04-03","2028-04-15"],
+["SH","2028-05-26","2028-05-26"],["SH","2028-06-24","2028-08-04"],
+["TH","2027-10-09","2027-10-23"],["TH","2027-12-23","2027-12-31"],["TH","2028-02-07","2028-02-12"],
+["TH","2028-04-03","2028-04-15"],["TH","2028-05-26","2028-05-26"],["TH","2028-07-22","2028-09-01"]
+];
+
+function frActiveOn(iso) {
+  const m = {};
+  for (let i = 0; i < FR_PERIODS.length; i++) {
+    const p = FR_PERIODS[i];
+    if (iso >= p[1] && iso <= p[2]) m[p[0]] = true;
+  }
+  return m;
+}
+function frCountOn(iso) { return Object.keys(frActiveOn(iso)).length; }
+// Bevoelkerungs-gewichteter Anteil (0..1): Summe der Einwohnerzahlen der Bundeslaender,
+// die an diesem Tag Ferien haben, geteilt durch die Gesamtbevoelkerung - beantwortet
+// "wie viel Prozent der Bevoelkerung ist heute ferienbedingt unterwegs/zuhause", nicht
+// nur "wie viele von 16 Laendern" (Nutzer-Anforderung 25.08.2026).
+function frPopulationFractionOn(iso) {
+  const active = frActiveOn(iso);
+  let sum = 0;
+  for (const code in active) sum += FR_STATE_POPULATION[code] || 0;
+  return sum / FR_TOTAL_POPULATION;
+}
+</script>
 
 <script>
-// Bildschirmschoner/Sperre: nach 10 Min. Inaktivitaet automatisch aktivieren, PIN
-// "5651" zum Entsperren. Polling/Datenerfassung laufen im Hintergrund unveraendert
-// weiter - nur die Anzeige wird ausgeblendet (Nutzer-Feedback 18.08.2026).
-// Bugfix (21.08.2026, Nutzer-Feedback: "Wenn man die Seite refreshed, dann werden
-// die Inhalte wieder gezeigt"): lastActivityAt lag bisher nur im Arbeitsspeicher und
-// wurde bei JEDEM Seitenaufruf auf "gerade eben" zurueckgesetzt - ein simpler Reload
-// hat die Sperre also komplett ausgehebelt, unabhaengig davon wie lange sie vorher
-// schon aktiv war. Jetzt in localStorage persistiert, damit sie einen Reload
-// ueberlebt.
-const LOCK_PIN = "5651";
-const LOCK_AFTER_MS = 10 * 60 * 1000;
-const LOCK_STORAGE_KEY = "el_lastActivityAt";
-let lastActivityAt = Number(localStorage.getItem(LOCK_STORAGE_KEY));
-if (!Number.isFinite(lastActivityAt) || lastActivityAt <= 0) lastActivityAt = Date.now();
-let locked = false;
-
-function lockScreen() {
-  if (locked) return;
-  locked = true;
-  const overlay = document.getElementById("lockOverlay");
-  overlay.style.display = "flex";
-  document.getElementById("pinInput").value = "";
-  document.getElementById("pinError").textContent = "";
-  document.getElementById("pinInput").focus();
-}
-
-function tryUnlock() {
-  const input = document.getElementById("pinInput");
-  if (input.value === LOCK_PIN) {
-    locked = false;
-    document.getElementById("lockOverlay").style.display = "none";
-    input.value = "";
-    lastActivityAt = Date.now();
-    localStorage.setItem(LOCK_STORAGE_KEY, String(lastActivityAt));
-  } else {
-    document.getElementById("pinError").textContent = "Falscher Code";
-    input.value = "";
-    input.focus();
-  }
-}
-
-document.getElementById("unlockBtn").addEventListener("click", tryUnlock);
-document.getElementById("pinInput").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") tryUnlock();
-});
-["mousemove", "keydown", "click", "touchstart", "scroll"].forEach((evt) =>
-  document.addEventListener(evt, () => {
-    if (!locked) lastActivityAt = Date.now();
-  })
-);
-// Sofort beim Laden pruefen, nicht erst nach dem ersten 5s-Intervall - sonst waeren
-// die Inhalte trotz laengst abgelaufener Sperrzeit noch kurz sichtbar.
-if (Date.now() - lastActivityAt > LOCK_AFTER_MS) lockScreen();
-setInterval(() => {
-  if (!locked && Date.now() - lastActivityAt > LOCK_AFTER_MS) lockScreen();
-  // lastActivityAt periodisch persistieren statt bei jedem Event (u.a. mousemove) -
-  // synchrone localStorage-Schreibzugriffe bei jeder Mausbewegung waeren unnoetig teuer.
-  if (!locked) localStorage.setItem(LOCK_STORAGE_KEY, String(lastActivityAt));
-}, 5000);
-
 let chart;
 let dailyBarChart;
 let latestData = null;
@@ -845,6 +1115,26 @@ function computeNewsHints(series, industryNews) {
 // letzten 8 Vorkommen desselben Wochentags glaettet das, bleibt aber
 // wochentags-synchron (Wochenende vs. Werktag bleibt vergleichbar).
 const RECENT_SAME_WEEKDAY_COUNT = 8;
+// Bugfix 24.08.2026 (Nutzer-Feedback: "Rekord Tag ... ggü. Ø letzte 8 Montage
+// ▼92%" ist irrefuehrend, solange erst wenige Stunden des heutigen Tages erfasst
+// sind - ein TEIL-Tages-Wert sieht neben dem VOLLEN Tagesdurchschnitt der
+// Referenztage zwangslaeufig winzig aus, unabhaengig vom echten Trend). Mind.
+// so viele Referenztage brauchen echte Intraday-Deckung zum gleichen
+// Zeitversatz, sonst faellt computeDayVsRecentSameWeekday() auf den vollen
+// Tagesdurchschnitt zurueck (identisch zum Schwellenwert fuer die Referenztage
+// insgesamt, siehe "zu wenig Datenpunkte" unten).
+const MIN_PRECISE_SAME_WEEKDAY_SAMPLES = 3;
+// Letzter bekannter Intraday-Messwert AM ODER VOR dem Ziel-Zeitpunkt - identisch
+// zu valueAtOrBefore() in Code.gs (dort fuer preciseLastVal()/"Vorwoche gleicher
+// Zeitraum" genutzt), hier fuer dieselbe Rekonstruktionstechnik auf Tagesebene.
+function valueAtOrBeforeJs(intradaySorted, targetMs) {
+  let result = null;
+  for (const p of intradaySorted) {
+    if (new Date(p.ts).getTime() <= targetMs) result = p.usd;
+    else break;
+  }
+  return result;
+}
 function computeDayVsRecentSameWeekday(data) {
   const daily = data.history?.daily ?? [];
   if (!daily.length) return null;
@@ -855,7 +1145,45 @@ function computeDayVsRecentSameWeekday(data) {
     .filter((d) => new Date(d.date + "T00:00:00Z").getUTCDay() === todayWeekday)
     .slice(-RECENT_SAME_WEEKDAY_COUNT);
   if (sameWeekdayEntries.length < 3) return null; // zu wenig Datenpunkte fuer eine belastbare Aussage
-  const avg = sameWeekdayEntries.reduce((sum, d) => sum + d.tagesumsatzUsd, 0) / sameWeekdayEntries.length;
+
+  // Praezise Variante: Referenztage zum gleichen Zeitversatz seit ihrer jeweils
+  // eigenen taeglichen Ablesezeit auswerten statt per vollem Tageswert - dieselbe
+  // Rekonstruktionstechnik wie preciseLastVal() in Code.gs. Referenztage sind
+  // wegen des Wochentags-Filters oben immer ein exaktes Vielfaches von 7 Tagen
+  // von heute entfernt, die taegliche Ablesezeit-Uhrzeit bleibt beim
+  // Zurueckrechnen in ganzen 24h-Schritten also automatisch erhalten, ganz ohne
+  // DST-/Zeitzonen-Parsing pro Datum (identisch zur Technik in
+  // buildDayCompare() weiter unten). preciseVals[i] = Wert "seit heute" beim
+  // Referenztag; remainingVals[i] = tatsaechlicher Rest des jeweiligen Tages ab
+  // demselben Zeitversatz - Basis fuer die Prognose unten (Nutzer-Anforderung
+  // 24.08.2026: "stuendliche Prognose ... nur mit vergleichbaren Tagen").
+  let preciseVals = [];
+  let remainingVals = [];
+  if (data.sinceAnchorIso) {
+    const intradaySorted = (data.history?.intraday ?? []).slice().sort((a, b) => (a.ts < b.ts ? -1 : 1));
+    if (intradaySorted.length) {
+      const DAY_MS = 24 * 60 * 60 * 1000;
+      const todayAnchorMs = new Date(data.sinceAnchorIso).getTime();
+      const elapsedMs = Date.now() - todayAnchorMs;
+      const firstIntradayMs = new Date(intradaySorted[0].ts).getTime();
+      sameWeekdayEntries.forEach((d) => {
+        const daysDiff = Math.round((new Date(todayBerlin + "T00:00:00Z") - new Date(d.date + "T00:00:00Z")) / DAY_MS);
+        const refAnchorMs = todayAnchorMs - daysDiff * DAY_MS;
+        if (refAnchorMs < firstIntradayMs) return; // Referenztag liegt vor Beginn der Intraday-Erfassung (18.08.2026)
+        const baseline = valueAtOrBeforeJs(intradaySorted, refAnchorMs);
+        const atOffset = valueAtOrBeforeJs(intradaySorted, refAnchorMs + elapsedMs);
+        if (baseline === null || atOffset === null) return;
+        const partial = atOffset - baseline;
+        if (partial < 0) return;
+        preciseVals.push(partial);
+        if (d.tagesumsatzUsd >= partial) remainingVals.push(d.tagesumsatzUsd - partial);
+      });
+    }
+  }
+  const precise = preciseVals.length >= MIN_PRECISE_SAME_WEEKDAY_SAMPLES;
+  const avg = precise
+    ? preciseVals.reduce((a, b) => a + b, 0) / preciseVals.length
+    : sameWeekdayEntries.reduce((sum, d) => sum + d.tagesumsatzUsd, 0) / sameWeekdayEntries.length;
   if (avg === 0) return null;
   const pct = ((data.sinceYesterdayUsd - avg) / avg) * 100;
   // Ausgeschriebener Plural statt Kuerzel (Nutzer-Feedback 20./21.08.2026: "was
@@ -863,7 +1191,31 @@ function computeDayVsRecentSameWeekday(data) {
   // Freitag neben einer Zahl missverstaendlich, z.B. leicht mit einer Waehrung
   // verwechselbar).
   const weekdayLabel = ["Sonntage", "Montage", "Dienstage", "Mittwoche", "Donnerstage", "Freitage", "Samstage"][todayWeekday];
-  return { pct, count: sameWeekdayEntries.length, weekdayLabel };
+  // Prognose heute: "seit heute" + typischer Rest der Referenztage ab demselben
+  // Zeitversatz (Nutzer-Anforderung 24.08.2026). Bewusst NICHT an Vorjahresdaten
+  // gekoppelt (dort aktuell 0, spaeter nur n=1 Referenztag verfuegbar - siehe
+  // Chat-Diskussion) - die letzten RECENT_SAME_WEEKDAY_COUNT gleichen Wochentage
+  // sind wesentlich frueher nutzbar und statistisch robuster, bleiben aber durch
+  // den Wochentags-Filter genauso vor dem "andere Wochentage/Monate verzerren
+  // das"-Problem geschuetzt, das der Nutzer zu Recht anmerkte.
+  const forecastUsd = precise && remainingVals.length >= MIN_PRECISE_SAME_WEEKDAY_SAMPLES
+    ? data.sinceYesterdayUsd + remainingVals.reduce((a, b) => a + b, 0) / remainingVals.length
+    : null;
+  return {
+    pct,
+    count: precise ? preciseVals.length : sameWeekdayEntries.length,
+    weekdayLabel,
+    precise,
+    forecastUsd,
+    // Nutzer-Anforderung 24.08.2026 (Option 1, "Kennzeichnen statt verstecken"):
+    // solange precise=false, braucht die UI eine sichtbare Erklaerung, WARUM der
+    // %-Wert noch auf dem vollen Tagesdurchschnitt basiert statt auf dem
+    // stundengenauen Vergleich - bewusst dynamisch (aktueller Stand von
+    // preciseVals.length) statt eines hartkodierten Aktivierungsdatums, damit es
+    // auch bei Erfassungsluecken korrekt bleibt.
+    preciseSampleCount: preciseVals.length,
+    preciseSampleTarget: MIN_PRECISE_SAME_WEEKDAY_SAMPLES,
+  };
 }
 
 // Kleine SVG-Sparkline (letzte 8 Wochen, EUR) + Trend-Pfeil im Header.
@@ -900,6 +1252,42 @@ function renderSparkline(weekly) {
   const pct = firstAvg !== 0 ? ((secondAvg - firstAvg) / Math.abs(firstAvg)) * 100 : 0;
   arrowEl.textContent = `${up ? "▲" : "▼"} ${Math.abs(pct).toFixed(0)}% (8 Wo.)`;
   arrowEl.style.color = color;
+}
+
+// Kurs-Sparkline (Nutzer-Anforderung 25.08.2026): letzte 10 Tage mit bekanntem
+// USD/EUR-Kurs, immer blau (--brand) statt trendabhaengiger Farbe - gleiche Bauweise
+// wie renderSparkline() oben, bewusst dupliziert statt parametrisiert, da die Faerbung
+// hier grundsaetzlich anders funktioniert (nie orange). Dahinter zusaetzlich Trend-
+// Pfeil + aktueller Kurswert (Nutzer-Anforderung 25.08.2026: "auch dahinter den
+// Trend mit Pfeil zeigen und ($ Kurs)"), Berechnung analog renderSparkline() (erste
+// vs. zweite Haelfte des Fensters), aber Text bleibt immer blau eingefaerbt.
+function renderFxSparkline(daily) {
+  const svg = document.getElementById("fxSparkline");
+  const arrowEl = document.getElementById("fxTrendArrow");
+  const points = (daily || []).filter((d) => d.fxRate > 0).slice(-10);
+  if (points.length < 2) {
+    svg.innerHTML = "";
+    arrowEl.textContent = "";
+    return;
+  }
+  const values = points.map((p) => p.fxRate);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const w = 90, h = 26, pad = 2;
+  const range = max - min || 1;
+  const coords = values.map((v, i) => {
+    const x = pad + (i / (values.length - 1)) * (w - 2 * pad);
+    const y = h - pad - ((v - min) / range) * (h - 2 * pad);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  svg.innerHTML = `<polyline points="${coords.join(" ")}" fill="none" stroke="#3355FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`;
+  const mid = Math.floor(values.length / 2);
+  const firstAvg = values.slice(0, mid).reduce((a, b) => a + b, 0) / mid;
+  const secondAvg = values.slice(mid).reduce((a, b) => a + b, 0) / (values.length - mid);
+  const up = secondAvg >= firstAvg;
+  const pct = firstAvg !== 0 ? ((secondAvg - firstAvg) / Math.abs(firstAvg)) * 100 : 0;
+  const current = values[values.length - 1];
+  arrowEl.textContent = `${up ? "▲" : "▼"} ${Math.abs(pct).toFixed(1)}% ($ ${current.toFixed(4)})`;
 }
 
 // --- Muster-Erkennung (rein statistisch aus der eigenen Historie, siehe
@@ -1028,13 +1416,30 @@ function render(data) {
   document.getElementById("sinceLabel").textContent = fmtSinceLabel(data);
   document.getElementById("sinceYesterday").textContent = fmtUsd(data.sinceYesterdayUsd);
   const dayVsRecent = computeDayVsRecentSameWeekday(data);
-  document.getElementById("sinceYesterdayVsLastYearLabel").textContent = dayVsRecent
+  const dayVsRecentLabelEl = document.getElementById("sinceYesterdayVsLastYearLabel");
+  const dayVsRecentValueEl = document.getElementById("sinceYesterdayVsLastYear");
+  dayVsRecentLabelEl.textContent = dayVsRecent
     ? `ggü. Ø letzte ${dayVsRecent.count} ${dayVsRecent.weekdayLabel}`
     : " ";
-  document.getElementById("sinceYesterdayVsLastYear").textContent = dayVsRecent
-    ? `${dayVsRecent.pct >= 0 ? "▲" : "▼"} ${Math.abs(dayVsRecent.pct).toFixed(0)}%`
+  // Nutzer-Anforderung 24.08.2026 ("Kennzeichnen statt verstecken"): solange der
+  // Vergleich noch auf dem vollen Tagesdurchschnitt basiert (precise=false), statt
+  // eines stundengenauen Werts, macht ein "*" + Tooltip transparent, warum die Zahl
+  // frueh am Tag stark negativ wirken kann - schaltet sich automatisch ab, sobald
+  // computeDayVsRecentSameWeekday() genug Referenztage mit Intraday-Deckung findet.
+  const dayVsRecentAsterisk = dayVsRecent && !dayVsRecent.precise ? "*" : "";
+  const dayVsRecentTitle = dayVsRecent && !dayVsRecent.precise
+    ? `Basis: voller Tagesdurchschnitt der Referenztage, noch nicht stundengenau - aktuell ${dayVsRecent.preciseSampleCount} von ${dayVsRecent.preciseSampleTarget} nötigen Referenztagen mit Intraday-Deckung zum gleichen Zeitversatz seit der täglichen Ablesezeit. Wird automatisch präziser, sobald genug vorliegen.`
+    : "";
+  dayVsRecentLabelEl.title = dayVsRecentTitle;
+  dayVsRecentValueEl.title = dayVsRecentTitle;
+  dayVsRecentValueEl.textContent = dayVsRecent
+    ? `${dayVsRecent.pct >= 0 ? "▲" : "▼"} ${Math.abs(dayVsRecent.pct).toFixed(0)}%${dayVsRecentAsterisk}`
     : " ";
   applyTrendText("sinceYesterdayVsLastYear", dayVsRecent ? dayVsRecent.pct : null);
+  document.getElementById("todayForecast").textContent =
+    dayVsRecent && dayVsRecent.forecastUsd !== null && dayVsRecent.forecastUsd !== undefined
+      ? fmtUsd(dayVsRecent.forecastUsd)
+      : "—";
   document.getElementById("thisWeekUsd").textContent = fmtUsd(data.thisWeekUsdNet);
   document.getElementById("avgDaily").textContent =
     data.avgDailyUsd === null || data.avgDailyUsd === undefined ? "—" : fmtUsd(data.avgDailyUsd);
@@ -1070,6 +1475,19 @@ function render(data) {
       : "—";
   applyTrendText("thisWeekEurPrev", data.lastWeekEurDirect !== null && data.lastWeekEurDirect !== undefined
     ? data.thisWeekEur - data.lastWeekEurDirect : null);
+  // Nutzer-Anforderung 25.08.2026: statt generischer Begriffe ("Dieser Monat" /
+  // "Vormonat") den konkreten Monatsnamen + Jahr zeigen ("August'26 bis jetzt" /
+  // "Juli'26 gesamt") - macht ohne Nachdenken klar, welcher Kalendermonat gemeint
+  // ist und dass der linke Wert noch laeuft, der rechte bereits abgeschlossen ist.
+  const nowForMonthLabel = new Date();
+  const thisMonthIdx = nowForMonthLabel.getMonth();
+  const thisMonthYear = nowForMonthLabel.getFullYear();
+  const lastMonthIdx = thisMonthIdx === 0 ? 11 : thisMonthIdx - 1;
+  const lastMonthYear = thisMonthIdx === 0 ? thisMonthYear - 1 : thisMonthYear;
+  document.getElementById("thisMonthLabel").textContent =
+    `${monthNamesLong[thisMonthIdx]}'${String(thisMonthYear).slice(2)} bis jetzt`;
+  document.getElementById("thisMonthEurPrevLabel").textContent =
+    `${monthNamesLong[lastMonthIdx]}'${String(lastMonthYear).slice(2)} gesamt`;
   document.getElementById("thisMonthEur").textContent = fmtEur(data.thisMonthEur);
   document.getElementById("thisMonthEurPrev").textContent =
     data.lastMonthEur !== null && data.lastMonthEur !== undefined
@@ -1080,11 +1498,15 @@ function render(data) {
   document.getElementById("thisYearEur").textContent = fmtEur(data.thisYearEur);
   // Nutzer-Korrektur 21.08.2026: "nicht 'Vergleich 2025 bis heute' sondern 'Vergleich
   // zu TT.MM.2025'" - explizites Vorjahresdatum statt nur der Jahreszahl, macht den
-  // exakten Stichtag sichtbar. lastYearSameDayIso = heute minus 1 Kalenderjahr.
-  const lastYearSameDay = new Date();
-  lastYearSameDay.setFullYear(lastYearSameDay.getFullYear() - 1);
-  document.getElementById("thisYearEurPrevLabel").textContent =
-    `Vergleich zu ${fmtFullDate(lastYearSameDay.toISOString())}`;
+  // exakten Stichtag sichtbar. Bugfix 24.08.2026 (Nutzer-Feedback: Vorjahresvergleich
+  // soll wochentagsgleich sein, nicht kalendertaggleich, siehe
+  // computeLastYearSamePeriodEur() in Code.gs) - das Label zeigt jetzt den vom Backend
+  // tatsaechlich genutzten (wochentagsgleichen, "-364 Tage") Cutoff statt hier selbst
+  // einen eigenen "heute -1 Kalenderjahr"-Tag zu berechnen, der sonst zum dahinter
+  // stehenden Betrag nicht mehr gepasst haette.
+  document.getElementById("thisYearEurPrevLabel").textContent = data.lastYearSamePeriodCutoffIso
+    ? `Vergleich zu ${fmtFullDate(data.lastYearSamePeriodCutoffIso)}`
+    : "Vergleich zu Vorjahr";
   document.getElementById("thisYearEurPrev").textContent =
     data.lastYearEurSamePeriod !== null && data.lastYearEurSamePeriod !== undefined
       ? fmtEur(data.lastYearEurSamePeriod)
@@ -1092,9 +1514,14 @@ function render(data) {
   applyTrendText("thisYearEurPrev", data.lastYearEurSamePeriod !== null && data.lastYearEurSamePeriod !== undefined
     ? data.thisYearEur - data.lastYearEurSamePeriod : null);
 
+  // Bugfix 24.08.2026: hier gehoert der %-Vergleich der ABGERECHNETEN EUR-Wochen
+  // (thisWeekEurVsLastWeekPct), nicht data.thisWeekVsLastWeekPct - das ist der LIVE
+  // USD-Wochenstand-Trend aus Feld2 ("Diese Woche" vs. "Vorwoche gleicher Zeitraum")
+  // und hat mit den hier gezeigten EUR-Werten (thisWeekEur/lastWeekEurDirect) nichts
+  // zu tun. Siehe Kommentar bei thisWeekEurVsLastWeekPct in Code.gs.
   const pctEl = document.getElementById("thisWeekPct");
-  pctEl.textContent = fmtPct(data.thisWeekVsLastWeekPct);
-  pctEl.style.color = trendColor(data.thisWeekVsLastWeekPct) ?? "";
+  pctEl.textContent = fmtPct(data.thisWeekEurVsLastWeekPct);
+  pctEl.style.color = trendColor(data.thisWeekEurVsLastWeekPct) ?? "";
 
   document.getElementById("fxRate").textContent = data.fxRateUsdEur
     ? `1 USD ≈ ${Number(data.fxRateUsdEur).toFixed(4)} EUR`
@@ -1207,10 +1634,10 @@ function render(data) {
 
   // Sparkline + Trend-Pfeil (letzte 8 Wochen) + Muster-/Notiz-Popover
   renderSparkline(weekly);
+  renderFxSparkline(data.history?.daily ?? []);
   renderInsightsPopover(data);
 
   // Farbcodierung der Karten je nach Vorzeichen des jeweiligen Vergleichswerts
-  applyTrendBorder("cardThisWeek", data.thisWeekVsLastWeekPct);
   applyTrendBorder("cardEurLast", data.lastWeekEurDirect !== null && data.lastWeekEurDirect !== undefined
     ? data.thisWeekEur - data.lastWeekEurDirect
     : null);
@@ -1752,12 +2179,31 @@ function buildYearCompare(monthly) {
   const thisYear = years[years.length - 1];
   const lastYear = years[years.length - 2];
   const monthNames = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+  // Ferienfläche (Nutzer-Anforderung 25.08.2026, nach Korrelations-Check per echten
+  // Tageswerten - Ergebnis: KEIN belegter statistischer Zusammenhang, siehe Chat
+  // 25.08.2026): Ø BEVÖLKERUNGS-Abwesenheit (nicht Bundesländer-Anzahl! - Nutzer-
+  // Korrektur 25.08.2026: "muss die Bevölkerungsabwesenheit abbilden, nicht die
+  // Bundeslandmengen") pro Monat, ausschließlich als optische Kontext-Fläche im
+  // Jahres-Chart gedacht, nicht als bewiesene Erklärung. Werte bereits als Anteil
+  // 0..1 (frPopulationFractionOn), nicht mehr durch 16 zu teilen wie ein Länder-
+  // Count. frPopulationFractionOn()/FR_PERIODS kommen aus dem globalen Ferienradar-
+  // Datenblock weiter oben in dieser Datei (siehe Kommentar dort).
+  const holidayByMonth = monthNames.map((_, i) => {
+    const y = Number(thisYear), m = i + 1;
+    const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    let sum = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      sum += frPopulationFractionOn(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+    }
+    return sum / daysInMonth;
+  });
   return {
     labels: monthNames,
     thisValues: monthNames.map((_, i) => byYear[thisYear]?.[i + 1] ?? null),
     lastValues: monthNames.map((_, i) => byYear[lastYear]?.[i + 1] ?? null),
     thisLabel: thisYear,
     lastLabel: lastYear,
+    holidayByMonth,
   };
 }
 
@@ -1928,6 +2374,9 @@ function updateChart(range) {
     b.classList.toggle("bg-amber", active);
     b.classList.toggle("text-white", active);
   });
+  // Default: Ferienflaechen-Hinweis ausblenden - wird weiter unten nur in der
+  // Jahresansicht wieder eingeblendet, falls die Flaeche tatsaechlich gezeichnet wird.
+  document.getElementById("holidayAreaHint")?.classList.add("hidden");
 
   let labels, datasets, chartType;
   let sideBarChart = null; // nur in Wochen-/Monatsansicht befuellt, siehe Balkendiagramm unten
@@ -2147,6 +2596,36 @@ function updateChart(range) {
           fill: false,
         });
       }
+      // Ferienfläche (Nutzer-Anforderung 25.08.2026, siehe Screenshot; Korrektur
+      // 25.08.2026: Bevölkerungs-Anteil statt Länder-Anzahl): Ø Bevölkerungs-
+      // Abwesenheit pro Monat als schwache Hintergrundfläche NUR in der Jahresansicht,
+      // ganz bewusst OHNE eigene Achse/Beschriftung (waere ein verbotener Dual-Axis-
+      // Chart) und normiert auf max. 80% der höchsten Umsatzlinie, damit sie die
+      // eigentliche Kurve nie überragt oder ablenkt. Reiner Kontext, KEINE bewiesene
+      // Erklärung - ein Korrelationscheck mit den echten Tageswerten ergab keinen
+      // statistisch tragfähigen Zusammenhang (Chat 25.08.2026), deshalb bewusst
+      // zurückhaltend eingefärbt statt reißerisch. Als erstes Dataset eingefügt
+      // (unshift), damit sie hinter den Umsatzlinien gezeichnet wird.
+      if (range === "yearly" && cmp.holidayByMonth) {
+        const validRevenue = [...cmp.thisValues, ...cmp.lastValues].filter((v) => v !== null && v !== undefined);
+        const revenueMax = validRevenue.length ? Math.max(...validRevenue) : 0;
+        const holidayCeiling = revenueMax * 0.8;
+        datasets.unshift({
+          label: "Bevölkerungsanwesenheit (Kontext, kein belegter Zusammenhang)",
+          // Nutzer-Korrektur 25.08.2026 ("kehre die Fläche um"): invertiert (1 - h) -
+          // Flaeche ist jetzt HOCH, wenn WENIG Leute in Ferien sind (hohe Anwesenheit/
+          // Erreichbarkeit), nicht mehr hoch bei viel Ferien-Abwesenheit.
+          data: cmp.holidayByMonth.map((h) => (1 - h) * holidayCeiling),
+          borderColor: "transparent",
+          backgroundColor: "rgba(154, 160, 199, 0.16)",
+          borderWidth: 0,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          tension: 0.35,
+          fill: "origin",
+        });
+        document.getElementById("holidayAreaHint")?.classList.remove("hidden");
+      }
     } else {
       // Fallback, solange fuer den Vergleich noch nicht genug Historie vorliegt
       // (z.B. "Tag" direkt nach Einfuehrung der Intraday-Erfassung).
@@ -2210,12 +2689,19 @@ function updateChart(range) {
     plugins: [dailyAnchorLinePlugin],
     options: {
       plugins: {
-        legend: { display: datasets.length > 1 },
+        // Ferienfläche (siehe oben) taucht bewusst weder in Legende noch Tooltip als
+        // eigene Zeile auf - sie ist reine visuelle Kontextfläche, kein Messwert mit
+        // eigener sinnvoller Zahl zum Ablesen.
+        legend: {
+          display: datasets.length > 1,
+          labels: { filter: (item) => !String(item.text || "").startsWith("Bevölkerungsanwesenheit") },
+        },
         dailyAnchorLine: { positions: dailyAnchorLines, label: dailyAnchorLabel },
         // Saisonale Hinweise + Ferien-/Branchennews-Info-Punkte als Tooltip-
         // Zusatzzeile(n) bei markierten Punkten in der "Gesamt"-Ansicht (Nutzer-
         // Feedback 19./20.08.2026).
         tooltip: {
+          filter: (item) => !String(item.dataset?.label || "").startsWith("Bevölkerungsanwesenheit"),
           callbacks: {
             // Bei der numerischen Zeit-Achse zeigt Chart.js im Titel sonst die rohe
             // x-Zahl (z.B. "0.499") statt des Tageslabels - hier zurueck auf den
@@ -2384,33 +2870,21 @@ document.getElementById("barChartNextBtn").addEventListener("click", () => {
   updateChart(currentRange);
 });
 
-// Ausklappbarer Bereich "Alle Auszahlungen" - standardmaessig eingeklappt, damit
-// die lange Liste nicht den Fokus von Tages-/Wochenwerten nimmt (Nutzer-Feedback
-// 19.08.2026).
-document.getElementById("payoutToggle").addEventListener("click", () => {
-  const content = document.getElementById("payoutContent");
-  const label = document.getElementById("payoutToggleLabel");
-  const nowHidden = content.classList.toggle("hidden");
-  label.textContent = nowHidden ? "▸ anzeigen" : "▾ verbergen";
-});
-
-// Tabs "Auszahlungen"/"News" im selben Feld statt eigener Seite (Nutzer-
-// Entscheidung 20.08.2026: "dann bleiben wir auf der Seite und wechseln nicht" -
-// die zuvor gebaute news.html wurde deshalb wieder verworfen). Ein Tab-Klick
-// klappt den Bereich bei Bedarf gleich mit auf.
+// Registerlaschen "Ferienradar/Auszahlungen/Nutzungsdaten/News" im selben Feld statt
+// getrennter Karten/eigener Seite (Nutzer-Entscheidung 20.08.2026: "dann bleiben wir
+// auf der Seite und wechseln nicht"; Nutzer-Anforderung 25.08.2026: alle Details-
+// Themen als EINE Browser-Tab-Optik zusammenfassen, siehe .tab-strip-Klasse). Karte
+// ist immer sichtbar (Nutzer-Korrektur 25.08.2026: kein Ein-/Ausklapp-Mechanismus
+// mehr), Ferienradar ist der Default-Tab.
+const PAYOUT_TABS = { payouts: "payoutsView", voices: "voicesView", ferien: "ferienView", news: "newsView" };
+const PAYOUT_TAB_BTNS = { payouts: "tabPayoutsBtn", voices: "tabVoicesBtn", ferien: "tabFerienBtn", news: "tabNewsBtn" };
 function showPayoutTab(tab) {
-  const content = document.getElementById("payoutContent");
-  const label = document.getElementById("payoutToggleLabel");
-  content.classList.remove("hidden");
-  label.textContent = "▾ verbergen";
-  const isNews = tab === "news";
-  document.getElementById("payoutsView").classList.toggle("hidden", isNews);
-  document.getElementById("newsView").classList.toggle("hidden", !isNews);
-  document.getElementById("csvExportBtn").classList.toggle("hidden", isNews);
-  document.getElementById("tabPayoutsBtn").style.color = isNews ? "" : "#FF8A1F";
-  document.getElementById("tabPayoutsBtn").classList.toggle("muted", isNews);
-  document.getElementById("tabNewsBtn").style.color = isNews ? "#FF8A1F" : "";
-  document.getElementById("tabNewsBtn").classList.toggle("muted", !isNews);
+  Object.entries(PAYOUT_TABS).forEach(([key, viewId]) => {
+    document.getElementById(viewId).classList.toggle("hidden", key !== tab);
+  });
+  Object.entries(PAYOUT_TAB_BTNS).forEach(([key, btnId]) => {
+    document.getElementById(btnId).classList.toggle("active", key === tab);
+  });
 }
 document.getElementById("tabPayoutsBtn").addEventListener("click", (e) => {
   e.stopPropagation();
@@ -2420,6 +2894,15 @@ document.getElementById("tabNewsBtn").addEventListener("click", (e) => {
   e.stopPropagation();
   showPayoutTab("news");
   markNewsAsSeen();
+});
+document.getElementById("tabVoicesBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  showPayoutTab("voices");
+  loadVoiceEarnings();
+});
+document.getElementById("tabFerienBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  showPayoutTab("ferien");
 });
 
 // Ungelesen-Badge fuer den News-Tab (Nutzer-Anforderung 21.08.2026, eigener
@@ -2545,6 +3028,271 @@ document.getElementById("csvExportBtn").addEventListener("click", (e) => {
   exportPayoutsCsv();
 });
 
+// Stimmen-Auswertung (Nutzer-Anforderung 25.08.2026): eigener, lazy geladener Endpunkt
+// (action=voiceEarnings) - erst beim ersten Klick auf den Tab, nicht bei jedem
+// tick()/Haupt-Refresh, da diese Rohdaten (taeglich pro Stimme) im Normalfall nicht
+// gebraucht werden. Rohzeilen werden einmal geholt und danach nur noch clientseitig
+// nach Monat gefiltert/aggregiert (kein erneuter Request bei Monatswechsel).
+let voiceEarningsRows = null;
+let voiceEarningsMonthKey = null; // "YYYY-MM", wird beim ersten Laden auf den juengsten Monat mit Daten gesetzt
+let voiceEarningsScope = "month"; // "month" | "2025" | "2026" | "all" (Nutzer-Anforderung 25.08.2026)
+async function loadVoiceEarnings() {
+  if (voiceEarningsRows !== null) return; // schon geladen
+  try {
+    const url = `${BRIDGE_URL}?token=${encodeURIComponent(BRIDGE_TOKEN)}&action=voiceEarnings`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    voiceEarningsRows = Array.isArray(data.rows) ? data.rows : [];
+  } catch (e) {
+    console.error("Konnte Stimmen-Auswertung nicht laden:", e);
+    voiceEarningsRows = [];
+  }
+  if (voiceEarningsRows.length) {
+    voiceEarningsMonthKey = voiceEarningsRows.reduce((max, r) => {
+      const k = String(r.datum || "").slice(0, 7);
+      return k > max ? k : max;
+    }, voiceEarningsRows[0].datum.slice(0, 7));
+  }
+  renderVoiceOverallStats();
+  renderVoiceEarnings();
+  renderVoiceChart();
+}
+function shiftVoiceMonth(delta) {
+  if (!voiceEarningsMonthKey) return;
+  const [y, m] = voiceEarningsMonthKey.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + delta, 1));
+  voiceEarningsMonthKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  renderVoiceEarnings();
+}
+// Zeitraum-Auswahl oberhalb der Tabelle (Nutzer-Anforderung 25.08.2026: "Gesamtsummen
+// 2025 ... 2026 gesamt und gesamt seit Beginn zeigen") - gleiches Button-Muster wie
+// die Verlauf-Chart-Zeitraeume (.range-btn/bg-amber), nur mit eigenem data-Attribut,
+// damit sich beide Gruppen nicht gegenseitig als "aktiv" markieren.
+function setVoiceScope(scope) {
+  voiceEarningsScope = scope;
+  document.querySelectorAll("[data-voice-scope]").forEach((b) => {
+    const active = b.dataset.voiceScope === scope;
+    b.classList.toggle("bg-amber", active);
+    b.classList.toggle("text-white", active);
+  });
+  document.getElementById("voiceMonthNav").classList.toggle("hidden", scope !== "month");
+  renderVoiceEarnings();
+  renderVoiceChart();
+}
+document.querySelectorAll("[data-voice-scope]").forEach((b) =>
+  b.addEventListener("click", (e) => { e.stopPropagation(); setVoiceScope(b.dataset.voiceScope); })
+);
+const VOICE_MONTH_NAMES = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+function voiceRowsForScope() {
+  if (!voiceEarningsRows) return [];
+  if (voiceEarningsScope === "all") return voiceEarningsRows;
+  if (voiceEarningsScope === "month") {
+    if (!voiceEarningsMonthKey) return [];
+    return voiceEarningsRows.filter((r) => String(r.datum || "").slice(0, 7) === voiceEarningsMonthKey);
+  }
+  return voiceEarningsRows.filter((r) => String(r.datum || "").slice(0, 4) === voiceEarningsScope);
+}
+function renderVoiceEarnings() {
+  const label = document.getElementById("voiceMonthLabel");
+  const body = document.getElementById("voicesTableBody");
+  const empty = document.getElementById("voicesEmptyState");
+  const wrap = document.getElementById("voicesTableWrap");
+  if (voiceEarningsScope === "month") {
+    if (voiceEarningsMonthKey) {
+      const [y, m] = voiceEarningsMonthKey.split("-").map(Number);
+      label.textContent = `${VOICE_MONTH_NAMES[m - 1]} ${y}`;
+    } else {
+      label.textContent = "–";
+    }
+  }
+  if (!voiceEarningsRows || !voiceEarningsRows.length) {
+    empty.classList.remove("hidden");
+    empty.textContent = "Noch keine Daten - der Stimmen-Collector läuft 1x täglich nach 22 Uhr.";
+    wrap.classList.add("hidden");
+    body.innerHTML = "";
+    return;
+  }
+  const rowsInScope = voiceRowsForScope();
+  const byVoice = {};
+  rowsInScope.forEach((r) => {
+    const key = r.voiceId || r.stimme;
+    byVoice[key] = byVoice[key] || { stimme: r.stimme || key, characters: 0 };
+    byVoice[key].characters += Number(r.characters || 0);
+  });
+  const sorted = Object.values(byVoice).sort((a, b) => b.characters - a.characters);
+  if (!sorted.length) {
+    empty.classList.remove("hidden");
+    empty.textContent = "Noch keine Daten für diesen Zeitraum.";
+    wrap.classList.add("hidden");
+    body.innerHTML = "";
+    return;
+  }
+  empty.classList.add("hidden");
+  wrap.classList.remove("hidden");
+  const maxChars = Math.max(...sorted.map((v) => v.characters), 1);
+  const totalChars = sorted.reduce((sum, v) => sum + v.characters, 0);
+  const rowsHtml = sorted.map((v) => `
+    <tr>
+      <td class="py-1 pr-2" style="vertical-align:top;">${escapeHtml(voiceShortName(v.stimme))}</td>
+      <td class="font-num text-right pr-3" style="vertical-align:top;">
+        <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;">
+          <div style="width:60px; height:6px; border-radius:3px; background:rgba(255,255,255,0.08); overflow:hidden; flex-shrink:0;">
+            <div style="width:${Math.max(2, (v.characters / maxChars) * 100)}%; height:100%; background:${voiceColorFor(v.stimme)}; border-radius:3px;"></div>
+          </div>
+          <span style="white-space:nowrap;">${fmtThousands(v.characters)}</span>
+        </div>
+      </td>
+      <td class="font-num text-right" style="vertical-align:top; white-space:nowrap;">${totalChars ? ((v.characters / totalChars) * 100).toFixed(1).replace(".", ",") : "0,0"}%</td>
+    </tr>
+  `).join("");
+  // Summenzeile pro Zeitraum (Nutzer-Anforderung 25.08.2026), optisch abgesetzt durch
+  // eine Trennlinie - gleiche Spaltenbreiten wie die Datenzeilen, daher keine eigene
+  // <tfoot>-Struktur noetig.
+  const totalRowHtml = `
+    <tr style="border-top:1px solid var(--card-border); font-weight:600;">
+      <td class="py-1 pr-2">Gesamt</td>
+      <td class="font-num text-right pr-3" style="white-space:nowrap;">${fmtThousands(totalChars)}</td>
+      <td class="font-num text-right" style="white-space:nowrap;">100,0%</td>
+    </tr>
+  `;
+  body.innerHTML = rowsHtml + totalRowHtml;
+}
+document.getElementById("voiceMonthPrev").addEventListener("click", (e) => { e.stopPropagation(); shiftVoiceMonth(-1); });
+document.getElementById("voiceMonthNext").addEventListener("click", (e) => { e.stopPropagation(); shiftVoiceMonth(1); });
+
+// Ø Characters/Tag und Ø Characters/Monat ueber den GESAMTEN verfuegbaren Datenbereich
+// (Nutzer-Anforderung 25.08.2026) - unabhaengig vom oben gewaehlten Scope, deshalb
+// einmalig beim Laden berechnet statt bei jedem renderVoiceEarnings()-Aufruf neu.
+function renderVoiceOverallStats() {
+  const elDay = document.getElementById("voiceAvgPerDay");
+  const elMonth = document.getElementById("voiceAvgPerMonth");
+  if (!voiceEarningsRows || !voiceEarningsRows.length) {
+    elDay.textContent = "–";
+    elMonth.textContent = "–";
+    return;
+  }
+  const dates = voiceEarningsRows.map((r) => r.datum).filter(Boolean).sort();
+  const minIso = dates[0];
+  const maxIso = dates[dates.length - 1];
+  const totalChars = voiceEarningsRows.reduce((sum, r) => sum + Number(r.characters || 0), 0);
+  const dayMs = 86400000;
+  const daysSpan = Math.round((new Date(maxIso + "T00:00:00Z") - new Date(minIso + "T00:00:00Z")) / dayMs) + 1;
+  const [minY, minM] = minIso.slice(0, 7).split("-").map(Number);
+  const [maxY, maxM] = maxIso.slice(0, 7).split("-").map(Number);
+  const monthsSpan = (maxY - minY) * 12 + (maxM - minM) + 1;
+  elDay.textContent = fmtThousands(totalChars / Math.max(1, daysSpan));
+  elMonth.textContent = fmtThousands(totalChars / Math.max(1, monthsSpan));
+}
+
+// Farbzuordnung je Stimme (Nutzer-Korrektur 25.08.2026: "Alexander orange, Markus
+// click-blau, David grau, Adrian gepunktet orange, Martin gepunktet click-blau") -
+// bewusst nur 2 Basisfarben (Amber, "--brand"-Blau) statt 5 verschiedener Hues:
+// Adrian/Martin teilen sich die Farbe mit Alexander/Marcus, unterscheiden sich aber
+// per gepunkteter statt durchgezogener Linie (siehe VOICE_DASHED unten). David ist
+// bewusst neutral/grau, keine der beiden Akzentfarben. Zuordnung nach dem ersten
+// Namensteil (vor " - "/" – "), robust gegenueber dem vollen ElevenLabs-Anzeigenamen
+// ("Alexander - for audiobook, ...").
+const VOICE_COLORS = {
+  "Alexander": "#FF8A1F",
+  "Marcus": "#3355FF",
+  "David": "#9aa0c7",
+  "Adrian": "#FF8A1F",
+  "Martin": "#3355FF",
+};
+const VOICE_DASHED = new Set(["Adrian", "Martin"]);
+function voiceShortName(fullName) {
+  return String(fullName || "").split(/[-–]/)[0].trim();
+}
+function voiceColorFor(fullName) {
+  return VOICE_COLORS[voiceShortName(fullName)] || "#9aa0c7";
+}
+function voiceIsDashed(fullName) {
+  return VOICE_DASHED.has(voiceShortName(fullName));
+}
+
+// Liniendiagramm (Nutzer-Anforderung 25.08.2026): nur fuer Jahres-/Gesamt-Scopes,
+// eine Linie je Stimme, x-Achse Jan-Dez (Jahres-Scope) bzw. gesamter verfuegbarer
+// Zeitraum seit Beginn (Gesamt-Scope). "Unknown voice" bleibt aussen vor (immer 0,
+// keine der 5 benannten Stimmen).
+let voiceLineChart = null;
+function voiceMonthlySeriesForScope() {
+  if (!voiceEarningsRows) return null;
+  let months;
+  if (voiceEarningsScope === "2025" || voiceEarningsScope === "2026") {
+    const y = voiceEarningsScope;
+    months = Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, "0")}`);
+  } else if (voiceEarningsScope === "all") {
+    const allMonths = new Set(voiceEarningsRows.map((r) => String(r.datum || "").slice(0, 7)).filter(Boolean));
+    months = [...allMonths].sort();
+  } else {
+    return null;
+  }
+  const byVoiceMonth = {};
+  voiceEarningsRows.forEach((r) => {
+    const name = r.stimme;
+    if (!name || name.startsWith("Unknown")) return;
+    const m = String(r.datum || "").slice(0, 7);
+    byVoiceMonth[name] = byVoiceMonth[name] || {};
+    byVoiceMonth[name][m] = (byVoiceMonth[name][m] || 0) + Number(r.characters || 0);
+  });
+  return { months, byVoiceMonth };
+}
+function renderVoiceChart() {
+  const wrap = document.getElementById("voiceChartWrap");
+  const tableCol = document.getElementById("voiceTableCol");
+  const showChart = voiceEarningsScope !== "month" && voiceEarningsRows && voiceEarningsRows.length;
+  wrap.classList.toggle("hidden", !showChart);
+  tableCol.style.width = showChart ? "33%" : "100%";
+  if (!showChart) {
+    if (voiceLineChart) { voiceLineChart.destroy(); voiceLineChart = null; }
+    return;
+  }
+  const series = voiceMonthlySeriesForScope();
+  const isAllScope = voiceEarningsScope === "all";
+  const labels = series.months.map((m) => {
+    const [y, mm] = m.split("-").map(Number);
+    return isAllScope ? `${FR_MONTHS[mm - 1]} '${String(y).slice(2)}` : FR_MONTHS[mm - 1];
+  });
+  const datasets = Object.keys(series.byVoiceMonth)
+    .sort((a, b) => {
+      const totalA = Object.values(series.byVoiceMonth[a]).reduce((s, v) => s + v, 0);
+      const totalB = Object.values(series.byVoiceMonth[b]).reduce((s, v) => s + v, 0);
+      return totalB - totalA;
+    })
+    .map((name) => ({
+      label: voiceShortName(name),
+      data: series.months.map((m) => series.byVoiceMonth[name][m] || 0),
+      borderColor: voiceColorFor(name),
+      backgroundColor: voiceColorFor(name),
+      borderDash: voiceIsDashed(name) ? [6, 4] : undefined,
+      borderWidth: 2,
+      pointRadius: 2,
+      pointHoverRadius: 4,
+      tension: 0.25,
+      fill: false,
+    }));
+  const ctx = document.getElementById("voiceLineChart").getContext("2d");
+  if (voiceLineChart) voiceLineChart.destroy();
+  voiceLineChart = new Chart(ctx, {
+    type: "line",
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { position: "bottom", labels: { color: "#9aa0c7", boxWidth: 10, font: { size: 11 } } },
+        tooltip: { callbacks: { label: (item) => `${item.dataset.label}: ${fmtThousands(item.parsed.y)}` } },
+      },
+      scales: {
+        x: { ticks: { color: "#9aa0c7", font: { size: 10 } }, grid: { color: "rgba(148, 163, 199, 0.35)" } },
+        y: { ticks: { color: "#9aa0c7", callback: (v) => fmtThousands(v) }, grid: { color: "rgba(148, 163, 199, 0.35)" } },
+      },
+    },
+  });
+}
+
 async function tick() {
   try {
     render(await fetchData());
@@ -2648,6 +3396,58 @@ setInterval(tick, POLL_INTERVAL_MS);
       { passive: true }
     );
   })();
+</script>
+
+<script>
+// Ferienradar-Kontext-Widget (Nutzer-Anforderung 25.08.2026). Eigene IIFE, aber
+// nutzt die globalen FR_*-Konstanten/Funktionen weiter oben in dieser Datei (ein
+// Datensatz statt zweier Kopien, die auseinanderlaufen koennten - siehe Kommentar
+// dort). Komplett unabhaengig von der restlichen App-Logik/dem Bridge-Fetch - laeuft
+// sofort beim Laden, braucht keine Live-Daten. Keine neuen Endpunkte/Secrets/
+// externen Aufrufe.
+(function () {
+  "use strict";
+
+  function frRender() {
+    var todayCountEl = document.getElementById("frTodayCount");
+    if (!todayCountEl) return; // Sektion nicht im DOM (z.B. anderer Layout-Stand)
+
+    var today = frTodayIso();
+    var todayMap = frActiveOn(today);
+    var codes = Object.keys(todayMap).sort();
+    todayCountEl.textContent = codes.length;
+
+    // Bevoelkerungs-gewichtete Kennzahl (Nutzer-Anforderung 25.08.2026): "3 von 16
+    // Laendern" gewichtet ein kleines Saarland genauso wie das grosse NRW - die
+    // Prozentzahl macht sichtbar, dass gerade DIESE 3 Laender (Bayern/BaWü/NRW)
+    // zusammen einen ueberproportionalen Bevoelkerungsanteil ausmachen.
+    var popPctEl = document.getElementById("frPopPct");
+    if (popPctEl) {
+      var popPct = frPopulationFractionOn(today) * 100;
+      popPctEl.textContent = "(≈ " + popPct.toFixed(0) + "% der Bevölkerung)";
+    }
+
+    var chipsEl = document.getElementById("frChips");
+    chipsEl.innerHTML = "";
+    if (!codes.length) {
+      var empty = document.createElement("span");
+      empty.className = "muted text-xs";
+      empty.textContent = "keine Ferien";
+      chipsEl.appendChild(empty);
+    } else {
+      codes.forEach(function (c) {
+        var chip = document.createElement("span");
+        chip.className = "text-xs font-medium font-num";
+        chip.style.cssText = "background:rgba(255,138,31,0.14); border:1px solid rgba(255,138,31,0.32); border-radius:999px; padding:2px 9px; color:var(--text);";
+        chip.textContent = c;
+        chip.title = FR_STATE_NAMES[c];
+        chipsEl.appendChild(chip);
+      });
+    }
+  }
+
+  frRender();
+})();
 </script>
 </body>
 </html>
