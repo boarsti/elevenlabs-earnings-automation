@@ -506,9 +506,6 @@
             <span id="voiceMonthLabel" class="text-sm font-semibold font-num">–</span>
             <button id="voiceMonthNext" class="nav-arrow" title="Folgemonat">▸</button>
           </div>
-          <div id="voicesEmptyState" class="hidden text-sm muted" style="padding:12px 4px;">
-            Noch keine Daten.
-          </div>
           <div id="voicesTableWrap" class="max-h-96 overflow-y-auto rounded-lg" style="border:1px solid var(--card-border); background:rgba(0,0,0,0.15); box-shadow: inset 0 0 8px rgba(0,0,0,0.25); padding:0 8px;">
             <table class="w-full text-sm" style="table-layout:fixed;">
               <colgroup>
@@ -2902,6 +2899,12 @@ document.getElementById("tabNewsBtn").addEventListener("click", (e) => {
 document.getElementById("tabVoicesBtn").addEventListener("click", (e) => {
   e.stopPropagation();
   showPayoutTab("voices");
+  // Sofort synchron rendern (5 bekannte Stimmen, Werte zunaechst 0) statt erst nach
+  // dem asynchronen Laden - Nutzer-Feedback 26.08.2026: "wirkt unruhig", wenn der
+  // Bereich beim Tab-Wechsel erst leer/klein ist und dann ploetzlich aufklappt,
+  // sobald die Daten da sind. So steht die Tabelle inkl. Namen von Anfang an fest,
+  // nur die Zahlen aktualisieren sich in-place, sobald loadVoiceEarnings() fertig ist.
+  renderVoiceEarnings();
   loadVoiceEarnings();
 });
 document.getElementById("tabFerienBtn").addEventListener("click", (e) => {
@@ -3068,6 +3071,7 @@ function shiftVoiceMonth(delta) {
   const d = new Date(Date.UTC(y, m - 1 + delta, 1));
   voiceEarningsMonthKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
   renderVoiceEarnings();
+  renderVoiceOverallStats();
 }
 // Zeitraum-Auswahl oberhalb der Tabelle (Nutzer-Anforderung 25.08.2026: "Gesamtsummen
 // 2025 ... 2026 gesamt und gesamt seit Beginn zeigen") - gleiches Button-Muster wie
@@ -3083,6 +3087,7 @@ function setVoiceScope(scope) {
   document.getElementById("voiceMonthNav").classList.toggle("hidden", scope !== "month");
   renderVoiceEarnings();
   renderVoiceChart();
+  renderVoiceOverallStats();
 }
 document.querySelectorAll("[data-voice-scope]").forEach((b) =>
   b.addEventListener("click", (e) => { e.stopPropagation(); setVoiceScope(b.dataset.voiceScope); })
@@ -3097,10 +3102,17 @@ function voiceRowsForScope() {
   }
   return voiceEarningsRows.filter((r) => String(r.datum || "").slice(0, 4) === voiceEarningsScope);
 }
+// Feste Reihenfolge/Liste der 5 echten Stimmklone (Nutzer-Anforderung 26.08.2026:
+// "Unknown voice" - eine 2025 stillgelegte/geloeschte Test-Stimme, verifiziert per
+// ElevenLabs-Voice-Listing (nicht mehr vorhanden, auch nicht in "show_legacy") -
+// MUSS aus der Uebersicht verschwinden, und die 5 echten Namen sollen als Zeilen
+// STEHEN BLEIBEN, auch ganz ohne Daten (erster Ladevorgang nach Tab-Klick, oder ein
+// Zeitraum ohne Datenpunkte, z.B. ein noch nicht begonnener Monat) - verhindert das
+// "Zusammenklappen"/den Layout-Sprung, den der Nutzer als "unruhig" beschrieben hat.
+const VOICE_KNOWN_ORDER = ["Alexander", "Marcus", "David", "Adrian", "Martin"];
 function renderVoiceEarnings() {
   const label = document.getElementById("voiceMonthLabel");
   const body = document.getElementById("voicesTableBody");
-  const empty = document.getElementById("voicesEmptyState");
   const wrap = document.getElementById("voicesTableWrap");
   if (voiceEarningsScope === "month") {
     if (voiceEarningsMonthKey) {
@@ -3110,35 +3122,24 @@ function renderVoiceEarnings() {
       label.textContent = "–";
     }
   }
-  if (!voiceEarningsRows || !voiceEarningsRows.length) {
-    empty.classList.remove("hidden");
-    empty.textContent = "Noch keine Daten - der Stimmen-Collector läuft 1x täglich nach 22 Uhr.";
-    wrap.classList.add("hidden");
-    body.innerHTML = "";
-    return;
-  }
+  wrap.classList.remove("hidden");
   const rowsInScope = voiceRowsForScope();
   const byVoice = {};
+  VOICE_KNOWN_ORDER.forEach((short) => { byVoice[short] = { stimme: short, characters: 0 }; });
   rowsInScope.forEach((r) => {
-    const key = r.voiceId || r.stimme;
-    byVoice[key] = byVoice[key] || { stimme: r.stimme || key, characters: 0 };
-    byVoice[key].characters += Number(r.characters || 0);
+    const short = voiceShortName(r.stimme);
+    if (!byVoice[short]) return; // "Unknown voice" & alles ausserhalb der 5 bekannten Klone bewusst nicht gelistet
+    byVoice[short].characters += Number(r.characters || 0);
   });
-  const sorted = Object.values(byVoice).sort((a, b) => b.characters - a.characters);
-  if (!sorted.length) {
-    empty.classList.remove("hidden");
-    empty.textContent = "Noch keine Daten für diesen Zeitraum.";
-    wrap.classList.add("hidden");
-    body.innerHTML = "";
-    return;
-  }
-  empty.classList.add("hidden");
-  wrap.classList.remove("hidden");
+  // Nutzer-Anforderung 26.08.2026: "immer die gleiche Reihenfolge" - feste Reihenfolge
+  // aus VOICE_KNOWN_ORDER statt nach Wert sortiert (vorher aenderte sich die
+  // Zeilenreihenfolge je nach Zeitraum, was das Wiederfinden erschwerte).
+  const sorted = VOICE_KNOWN_ORDER.map((short) => byVoice[short]);
   const maxChars = Math.max(...sorted.map((v) => v.characters), 1);
   const totalChars = sorted.reduce((sum, v) => sum + v.characters, 0);
   const rowsHtml = sorted.map((v) => `
     <tr>
-      <td class="py-1 pr-2" style="vertical-align:top;">${escapeHtml(voiceShortName(v.stimme))}</td>
+      <td class="py-1 pr-2" style="vertical-align:top;">${escapeHtml(v.stimme)}</td>
       <td class="font-num text-right pr-3" style="vertical-align:top;">
         <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;">
           <div style="width:60px; height:6px; border-radius:3px; background:rgba(255,255,255,0.08); overflow:hidden; flex-shrink:0;">
@@ -3154,10 +3155,10 @@ function renderVoiceEarnings() {
   // eine Trennlinie - gleiche Spaltenbreiten wie die Datenzeilen, daher keine eigene
   // <tfoot>-Struktur noetig.
   const totalRowHtml = `
-    <tr style="border-top:1px solid var(--card-border); font-weight:600;">
+    <tr style="border-top:1px solid var(--card-border); font-weight:500; color:#3355FF;">
       <td class="py-1 pr-2">Gesamt</td>
       <td class="font-num text-right pr-3" style="white-space:nowrap;">${fmtThousands(totalChars)}</td>
-      <td class="font-num text-right" style="white-space:nowrap;">100,0%</td>
+      <td class="font-num text-right" style="white-space:nowrap;">${totalChars ? "100,0" : "0,0"}%</td>
     </tr>
   `;
   body.innerHTML = rowsHtml + totalRowHtml;
@@ -3165,9 +3166,14 @@ function renderVoiceEarnings() {
 document.getElementById("voiceMonthPrev").addEventListener("click", (e) => { e.stopPropagation(); shiftVoiceMonth(-1); });
 document.getElementById("voiceMonthNext").addEventListener("click", (e) => { e.stopPropagation(); shiftVoiceMonth(1); });
 
-// Ø Characters/Tag und Ø Characters/Monat ueber den GESAMTEN verfuegbaren Datenbereich
-// (Nutzer-Anforderung 25.08.2026) - unabhaengig vom oben gewaehlten Scope, deshalb
-// einmalig beim Laden berechnet statt bei jedem renderVoiceEarnings()-Aufruf neu.
+// Ø Characters/Tag und Ø Characters/Monat (Nutzer-Korrektur 26.08.2026: "müssen
+// jeweils auf die Jahre runtergebrochen werden, bei Gesamt berechnet sich das aus
+// der gesamten Zeit mtl. neu"; Praezisierung: "bei Monat muss Ø Characters/Tag
+// gesamt der jeweilige Monat berechnet werden") - folgt jetzt exakt demselben Scope
+// wie die Tabelle (voiceRowsForScope()): im Monats-Scope nur der gerade gezeigte
+// Monat, bei "2025"/"2026" nur das jeweilige Jahr, bei "Gesamt" der komplette
+// verfuegbare Zeitraum - deshalb bei jedem Scope-/Monatswechsel neu berechnet statt
+// nur einmalig beim Laden.
 function renderVoiceOverallStats() {
   const elDay = document.getElementById("voiceAvgPerDay");
   const elMonth = document.getElementById("voiceAvgPerMonth");
@@ -3176,10 +3182,16 @@ function renderVoiceOverallStats() {
     elMonth.textContent = "–";
     return;
   }
-  const dates = voiceEarningsRows.map((r) => r.datum).filter(Boolean).sort();
+  const rows = voiceRowsForScope();
+  if (!rows.length) {
+    elDay.textContent = "–";
+    elMonth.textContent = "–";
+    return;
+  }
+  const dates = rows.map((r) => r.datum).filter(Boolean).sort();
   const minIso = dates[0];
   const maxIso = dates[dates.length - 1];
-  const totalChars = voiceEarningsRows.reduce((sum, r) => sum + Number(r.characters || 0), 0);
+  const totalChars = rows.reduce((sum, r) => sum + Number(r.characters || 0), 0);
   const dayMs = 86400000;
   const daysSpan = Math.round((new Date(maxIso + "T00:00:00Z") - new Date(minIso + "T00:00:00Z")) / dayMs) + 1;
   const [minY, minM] = minIso.slice(0, 7).split("-").map(Number);
@@ -3258,12 +3270,12 @@ function renderVoiceChart() {
     const [y, mm] = m.split("-").map(Number);
     return isAllScope ? `${FR_MONTHS[mm - 1]} '${String(y).slice(2)}` : FR_MONTHS[mm - 1];
   });
-  const datasets = Object.keys(series.byVoiceMonth)
-    .sort((a, b) => {
-      const totalA = Object.values(series.byVoiceMonth[a]).reduce((s, v) => s + v, 0);
-      const totalB = Object.values(series.byVoiceMonth[b]).reduce((s, v) => s + v, 0);
-      return totalB - totalA;
-    })
+  // Nutzer-Anforderung 26.08.2026: feste Reihenfolge (VOICE_KNOWN_ORDER) statt nach
+  // Wert sortiert, damit Tabelle und Legende immer gleich angeordnet sind.
+  const chartVoiceNames = VOICE_KNOWN_ORDER
+    .map((short) => Object.keys(series.byVoiceMonth).find((name) => voiceShortName(name) === short))
+    .filter(Boolean);
+  const datasets = chartVoiceNames
     .map((name) => ({
       label: voiceShortName(name),
       data: series.months.map((m) => series.byVoiceMonth[name][m] || 0),

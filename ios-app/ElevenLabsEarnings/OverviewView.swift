@@ -167,6 +167,14 @@ struct OverviewView: View {
         trendColor(value) ?? .secondary
     }
 
+    /// App-Sync 26.08.2026 (HTML-Dashboard Feld4-6, Nutzer-Korrektur): die Trendfarbe
+    /// gehoert auf den AKTUELLEN Wert (orange bei Steigerung/blau bei Rueckgang),
+    /// nicht auf den Vergleichswert - der bleibt immer neutral weiss. Vorher war das
+    /// hier (wie im Dashboard) versehentlich vertauscht.
+    private func trendColorOrWhite(_ value: Double?) -> Color {
+        trendColor(value) ?? .white
+    }
+
     /// "(▲ 5%)"/"(▼ 5%)"-Anhaengsel fuer die Langzeit-Ø/Tag-Zeilen (App-Sync mit dem
     /// HTML-Dashboard Feld3, Nutzer-Anforderung 21.08.2026).
     private func longTermTrendSuffix(current: Double?, longTerm: Double) -> String {
@@ -260,10 +268,10 @@ struct OverviewView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.caption).foregroundStyle(.secondary)
                 HStack(spacing: 8) {
-                    Text(value).font(.headline).foregroundStyle(.white)
+                    Text(value).font(.headline).foregroundStyle(trendColorOrWhite(trend))
                     DeltaPill(percent: pill)
                 }
-                CompareLine(label: compareLabel, value: compareValue, color: trendColorOrSecondary(trend))
+                CompareLine(label: compareLabel, value: compareValue, color: .white)
             }
             Spacer()
         }
