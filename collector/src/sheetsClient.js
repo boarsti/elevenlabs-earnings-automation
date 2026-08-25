@@ -34,6 +34,13 @@ const DAILY_HEADERS = [
 
 const WEEKLY_HEADERS = ["DatumZeit", "DatumIso", "BetragEUR", "Status"];
 
+// Pro-Stimme-Aufschluesselung (Nutzer-Anforderung 25.08.2026: "wieviele Credits die
+// jeweiligen Stimmklone vermarktet haben"), separat vom Haupt-Collector befuellt -
+// siehe collectVoiceEarnings.js. Eigener Tab statt Erweiterung von DAILY_HEADERS,
+// weil eine Zeile pro (Datum, Stimme) noetig ist, nicht pro Datum.
+const VOICE_EARNINGS_SHEET = "VoiceEarningsDaily";
+const VOICE_EARNINGS_HEADERS = ["Datum", "VoiceId", "Stimme", "USD", "Characters"];
+
 // Ein Datenpunkt pro Collector-Lauf (alle 10 Minuten), nur die letzten 48h werden
 // behalten (siehe collect.js) - ermoeglicht eine echte Stunden-Kurve fuer "heute vs.
 // gestern" im Dashboard, statt nur des einen Tages-Endwerts aus "Automatisiert".
@@ -110,6 +117,30 @@ export async function ensureTabs(sheets, spreadsheetId) {
       requestBody: { values: [INTRADAY_HEADERS] },
     });
   }
+}
+
+// Eigene, schlanke Variante statt Erweiterung von ensureTabs() - bewusst entkoppelt
+// vom Haupt-Collector (siehe collectVoiceEarnings.js: separater Workflow/Cron, damit
+// ein Problem hier nicht den alle-15-Minuten-Lauf der Kernzahlen gefaehrdet).
+export async function ensureVoiceEarningsTab(sheets, spreadsheetId) {
+  const meta = await sheets.spreadsheets.get({ spreadsheetId });
+  const existing = new Set(meta.data.sheets.map((s) => s.properties.title));
+  if (existing.has(VOICE_EARNINGS_SHEET)) return;
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: { requests: [{ addSheet: { properties: { title: VOICE_EARNINGS_SHEET } } }] },
+  });
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${VOICE_EARNINGS_SHEET}!A1`,
+    valueInputOption: "RAW",
+    requestBody: { values: [VOICE_EARNINGS_HEADERS] },
+  });
+}
+
+export async function readVoiceEarningsRows(sheets, spreadsheetId) {
+  return readRows(sheets, spreadsheetId, VOICE_EARNINGS_SHEET, VOICE_EARNINGS_HEADERS);
 }
 
 export async function readDailyRows(sheets, spreadsheetId) {
@@ -241,8 +272,10 @@ export {
   WEEKLY_HEADERS,
   STATUS_KEYS,
   INTRADAY_HEADERS,
+  VOICE_EARNINGS_HEADERS,
   DAILY_SHEET,
   WEEKLY_SHEET,
   STATUS_SHEET,
   INTRADAY_SHEET,
+  VOICE_EARNINGS_SHEET,
 };
