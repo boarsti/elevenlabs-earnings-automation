@@ -203,12 +203,12 @@
              Welle... stehen" - gemeint war die Kurs-Welle UNTER dem Titel/Datum-
              Bereich, ueber der bestehenden Trend-Welle). -->
         <div class="flex items-center gap-2">
-          <svg id="fxSparkline" width="70" height="22" viewBox="0 0 90 26" title="USD/EUR-Kurs, letzte 10 Tage"></svg>
           <span id="fxTrendArrow" class="text-sm font-num font-medium" style="color:#3355FF;"></span>
+          <svg id="fxSparkline" width="70" height="22" viewBox="0 0 90 26" title="USD/EUR-Kurs, letzte 10 Tage"></svg>
         </div>
         <div class="flex items-center gap-2">
-          <svg id="trendSparkline" width="70" height="22" viewBox="0 0 90 26"></svg>
           <span id="trendArrow" class="text-sm font-num font-medium"></span>
+          <svg id="trendSparkline" width="70" height="22" viewBox="0 0 90 26"></svg>
           <button id="insightsInfoBtn" class="text-sm muted" style="line-height:1;" title="Details zum Trend">ⓘ</button>
           <div id="insightsPopover" class="hidden card p-4 text-left text-sm" style="position:absolute; top:52px; right:0; width:320px; max-width:85vw; z-index:20;">
             <p class="font-display font-bold mb-2 text-xs muted">Wahrscheinliche Muster (statistisch, keine Garantie)</p>
@@ -235,7 +235,12 @@
           <p id="lastDataPointLabel" class="text-xs font-num font-medium muted">Letzter Datenpunkt: —</p>
           <button id="refreshBtn" class="text-sm muted" style="line-height:1;" title="Jetzt neu von der Bridge abfragen">↻</button>
         </div>
-        <p class="text-xs muted font-num">Kurs: <span id="fxRate">—</span></p>
+        <!-- Nutzer-Anforderung 26.08.2026: Kurs-Zeile hier ausgeblendet (steht jetzt
+             als Legende neben der Kurs-Sparkline oben rechts) - der zugrundeliegende
+             Wert (#fxRate-Element bzw. data.fxRateUsdEur) wird weiterhin normal
+             berechnet/aktualisiert und ueberall sonst im Dashboard (EUR-Schaetzungen
+             etc.) genutzt, nur diese eine Anzeige-Zeile ist weg. -->
+        <p class="text-xs muted font-num hidden">Kurs: <span id="fxRate">—</span></p>
       </div>
     </header>
 
@@ -1322,7 +1327,12 @@ function renderFxSparkline(daily) {
   const up = secondAvg >= firstAvg;
   const pct = firstAvg !== 0 ? ((secondAvg - firstAvg) / Math.abs(firstAvg)) * 100 : 0;
   const current = values[values.length - 1];
-  arrowEl.textContent = `${up ? "▲" : "▼"} ${Math.abs(pct).toFixed(1)}% ($ ${current.toFixed(4)})`;
+  // Nutzer-Anforderung 26.08.2026: eindeutige Kurs-Schreibweise "1 $ = 0,8575 €"
+  // statt der vorherigen "($ 0.8575)" - war missverstaendlich lesbar wie ein
+  // Dollarbetrag statt einem Wechselkurs. Ersetzt zugleich die jetzt ausgeblendete
+  // "Kurs: ..."-Zeile oben links (Wert selbst bleibt unveraendert berechnet).
+  const rateStr = current.toFixed(4).replace(".", ",");
+  arrowEl.textContent = `${up ? "▲" : "▼"} ${Math.abs(pct).toFixed(1)}% · 1 $ = ${rateStr} €`;
 }
 
 // --- Muster-Erkennung (rein statistisch aus der eigenen Historie, siehe
