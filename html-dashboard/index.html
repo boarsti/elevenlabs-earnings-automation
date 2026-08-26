@@ -44,12 +44,14 @@
     box-shadow: var(--card-shadow);
   }
   .font-num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
-  .range-btn { transition: background-color 0.15s ease, color 0.15s ease; }
-  .range-btn.bg-amber { box-shadow: 0 2px 8px rgba(255, 138, 31, 0.35); }
+  /* .range-btn traegt seit 26.08.2026 zusaetzlich .tab-strip-btn (Registerlaschen-Optik
+     wie beim Details-Tab-Strip) - die Klasse bleibt nur noch fuer die bestehende JS-
+     Selektorlogik (querySelectorAll(".range-btn") in updateChart()/Click-Handler)
+     erhalten, eigene visuelle Regeln braucht sie nicht mehr. */
   /* Eigene Klasse statt .range-btn fuer die Stimmen-Zeitraum-Buttons (Monat/2025/2026/
      Gesamt) - Verwechslungsgefahr behoben (25.08.2026): updateChart() durchsucht
      document.querySelectorAll(".range-btn") global und haette sonst versehentlich
-     auch diese Buttons erfasst und ihnen bg-amber/text-white bei jedem Tick wieder
+     auch diese Buttons erfasst und ihnen die aktive Markierung bei jedem Tick wieder
      entzogen, weil sie kein "data-range"-Attribut tragen. */
   .voice-scope-btn { transition: background-color 0.15s ease, color 0.15s ease; }
   .voice-scope-btn.bg-amber { box-shadow: 0 2px 8px rgba(255, 138, 31, 0.35); }
@@ -374,15 +376,28 @@
     </section>
 
     <section class="card p-3">
-      <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
-        <h2 class="font-display font-bold">Verlauf</h2>
-        <div class="flex gap-2 text-sm items-center flex-wrap">
-          <button id="btnDaily" data-range="daily" class="range-btn px-3 py-1 rounded-full">Tag</button>
-          <button id="btnWeekly" data-range="weekly" class="range-btn px-3 py-1 rounded-full bg-amber text-white">Woche</button>
-          <button id="btnMonthly" data-range="monthly" class="range-btn px-3 py-1 rounded-full">Monat</button>
-          <button id="btnYearly" data-range="yearly" class="range-btn px-3 py-1 rounded-full">Jahr</button>
-          <button data-range="total" class="range-btn px-3 py-1 rounded-full">Gesamt</button>
-        </div>
+      <h2 id="verlaufTitle" class="font-display font-bold mb-2">Wochenverlauf</h2>
+      <!-- Registerlaschen-Optik wie beim Details-Tab-Strip unten (Nutzer-Anforderung
+           26.08.2026: "TAGES, WOCHEN-, MONATS und JAHRES-, bzw. GESAMT-VERLAUFS-
+           Ansichten exakt im gleichen Stil ... wie unten die Tabs" - siehe .tab-strip/
+           .tab-strip-btn). Anders als dort bleibt hier eine Ueberschrift bestehen, aber
+           dynamisch je Zeitraum (Nutzer-Vorgabe: "Stundenverlauf"/"Wochenverlauf"/
+           "Monatsverlauf"/"Jahresverlauf"/"Gesamtverlauf" statt immer nur "Verlauf" -
+           siehe updateChart()). .range-btn bleibt zusaetzlich zu .tab-strip-btn auf den
+           Buttons, damit die bestehende JS-Selektorlogik (querySelectorAll(".range-btn"))
+           unveraendert weiterfunktioniert. -->
+      <div class="tab-strip mb-3" role="tablist">
+        <!-- Archivierte Jahres-Tabs (2025, spaeter 2026, ...) werden hier von
+             syncYearArchiveTabs() automatisch als direkte Flex-Geschwister VOR "Tag"
+             eingefuegt (Nutzer-Anforderung 26.08.2026: "vor dem Stundenverlauf-Tab die
+             vergangenen Jahre zeigen") - kein umschliessendes Element, damit .tab-strips
+             flex/gap-Layout jeden Jahres-Button einzeln erfasst. Erkennbar an der
+             .year-archive-tab-Klasse (siehe syncYearArchiveTabs()). -->
+        <button id="btnDaily" data-range="daily" class="range-btn tab-strip-btn" role="tab">Tag</button>
+        <button id="btnWeekly" data-range="weekly" class="range-btn tab-strip-btn active" role="tab">Woche</button>
+        <button id="btnMonthly" data-range="monthly" class="range-btn tab-strip-btn" role="tab">Monat</button>
+        <button id="btnYearly" data-range="yearly" class="range-btn tab-strip-btn" role="tab">Jahr</button>
+        <button data-range="total" class="range-btn tab-strip-btn" role="tab">Gesamt</button>
       </div>
       <!-- Legendenhinweis zur Ferienfläche (Nutzer-Feedback 25.08.2026: "Legendenhinweis
            fehlt unter Button 2026") - bewusst NICHT als echter Legenden-Eintrag (siehe
@@ -1767,6 +1782,7 @@ function render(data) {
   renderNewsList(data.industryNews);
   updateNewsUnreadBadge(data.industryNews);
 
+  syncYearArchiveTabs();
   updateChart(currentRange);
 }
 
@@ -2305,16 +2321,24 @@ function buildYearlyBars(data) {
 
 // "Jahr": Monatswerte (EUR, aus den woechentlichen Auszahlungen aggregiert) dieses
 // Jahr vs. Vorjahr, Jan-Dez nebeneinander.
-function buildYearCompare(monthly) {
+// targetYear (Nutzer-Anforderung 26.08.2026, "vergangene Jahre" als eigene Tabs vor
+// Stundenverlauf): optional ein bestimmtes Jahr statt immer nur des aktuellsten
+// anzeigen - fuer die archivierten Jahres-Tabs (2025, spaeter 2026, ...), die
+// automatisch aus den vorhandenen Daten entstehen (jedes Jahr ausser dem neuesten
+// zaehlt als "archiviert", siehe syncYearArchiveTabs()). Ohne Vorjahresdaten (aeltestes
+// bekanntes Jahr) bleibt lastValues/lastLabel einfach leer statt die ganze Funktion
+// null zurueckzugeben - der Tab zeigt dann nur die eine Kurve.
+function buildYearCompare(monthly, targetYear) {
   const byYear = {};
   monthly.forEach((m) => {
     const [y, mm] = m.month.split("-");
     (byYear[y] = byYear[y] || {})[Number(mm)] = m.eur;
   });
   const years = Object.keys(byYear).sort();
-  if (years.length < 2) return null;
-  const thisYear = years[years.length - 1];
-  const lastYear = years[years.length - 2];
+  if (!years.length) return null;
+  const thisYear = targetYear && years.includes(targetYear) ? targetYear : years[years.length - 1];
+  const thisIdx = years.indexOf(thisYear);
+  const lastYear = thisIdx > 0 ? years[thisIdx - 1] : null;
   const monthNames = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
   // Ferienfläche (Nutzer-Anforderung 25.08.2026, nach Korrelations-Check per echten
   // Tageswerten - Ergebnis: KEIN belegter statistischer Zusammenhang, siehe Chat
@@ -2337,11 +2361,46 @@ function buildYearCompare(monthly) {
   return {
     labels: monthNames,
     thisValues: monthNames.map((_, i) => byYear[thisYear]?.[i + 1] ?? null),
-    lastValues: monthNames.map((_, i) => byYear[lastYear]?.[i + 1] ?? null),
+    lastValues: lastYear ? monthNames.map((_, i) => byYear[lastYear]?.[i + 1] ?? null) : null,
     thisLabel: thisYear,
     lastLabel: lastYear,
     holidayByMonth,
   };
+}
+
+// Jahres-Archiv-Tabs (Nutzer-Anforderung 26.08.2026): "vor dem Stundenverlauf-Tab die
+// vergangenen Jahre zeigen ... ab dem neuen Jahr [wandert] das aktuelle Jahr in ein
+// neues Tab". Jedes Jahr AUSSER dem neuesten (= weiterhin ueber "Jahresverlauf"
+// erreichbar) bekommt automatisch einen eigenen Tab, auch bei einem unvollstaendigen
+// Startjahr (Nutzer: "auch wenn erst im Februar gestartet wurde"). Rein datengetrieben
+// (nicht datums-getriggert) - sobald latestData.history.monthly ein neues Jahr enthaelt,
+// "archiviert" sich das bisher neueste automatisch, ganz ohne Spezialfall fuer den
+// 1.1. Wird bei jedem render() aufgerufen, baut die Buttons aber nur neu, wenn sich die
+// Jahresliste tatsaechlich geaendert hat - sonst wuerde jeder 15-Minuten-Tick den
+// aktiven Tab zuruecksetzen.
+let lastArchivedYearsKey = "";
+function syncYearArchiveTabs() {
+  const monthly = latestData?.history?.monthly ?? [];
+  const years = [...new Set(monthly.map((m) => m.month.slice(0, 4)))].sort();
+  const archivedYears = years.slice(0, -1); // alle ausser dem neuesten/laufenden Jahr
+  const key = archivedYears.join(",");
+  if (key === lastArchivedYearsKey) return;
+  lastArchivedYearsKey = key;
+  const anchor = document.getElementById("btnDaily");
+  const strip = anchor.parentElement;
+  strip.querySelectorAll(".year-archive-tab").forEach((el) => el.remove());
+  archivedYears.forEach((year) => {
+    const btn = document.createElement("button");
+    btn.dataset.range = `year-${year}`;
+    btn.className = "range-btn tab-strip-btn year-archive-tab";
+    btn.setAttribute("role", "tab");
+    btn.textContent = year;
+    btn.addEventListener("click", () => {
+      barChartOffset = 0;
+      updateChart(btn.dataset.range);
+    });
+    strip.insertBefore(btn, anchor);
+  });
 }
 
 // Vertikale gepunktete Linien an den taeglichen Zeitankern (z.B. 11:59) im Wochen-
@@ -2503,13 +2562,25 @@ function computeAnchorFraction(readoutIso) {
   return (d.getHours() + d.getMinutes() / 60) / 24;
 }
 
+// Titel je Zeitraum (Nutzer-Vorgabe 26.08.2026, statt immer nur "Verlauf").
+const VERLAUF_TITLES = {
+  daily: "Stundenverlauf",
+  weekly: "Wochenverlauf",
+  monthly: "Monatsverlauf",
+  yearly: "Jahresverlauf",
+  total: "Gesamtverlauf",
+};
 function updateChart(range) {
   currentRange = range;
   if (!latestData) return;
+  // "year-2025" etc. (archivierte Jahres-Tabs, Nutzer-Anforderung 26.08.2026) - hier
+  // oben in Funktionsscope statt nur im spaeteren else-Block, weil auch der
+  // chartUnitFmt/dailyBarWrap-Code weiter unten das braucht.
+  const archiveYearMatch = /^year-(\d{4})$/.exec(range);
+  document.getElementById("verlaufTitle").textContent =
+    archiveYearMatch ? `Jahresverlauf ${archiveYearMatch[1]}` : VERLAUF_TITLES[range] || "Verlauf";
   document.querySelectorAll(".range-btn").forEach((b) => {
-    const active = b.dataset.range === range;
-    b.classList.toggle("bg-amber", active);
-    b.classList.toggle("text-white", active);
+    b.classList.toggle("active", b.dataset.range === range);
   });
   // Default: Ferienflaechen-Hinweis ausblenden - wird weiter unten nur in der
   // Jahresansicht wieder eingeblendet, falls die Flaeche tatsaechlich gezeichnet wird.
@@ -2546,6 +2617,7 @@ function updateChart(range) {
     const pointColor = { dip: "#3355FF", news: "#a855f7", holiday: "#3FBF6F", normal: "#FF8A1F" };
     datasets = [
       {
+        label: "Gesamtumsatz",
         data: series.map((p) => p.eur ?? 0),
         borderColor: "#FF8A1F",
         backgroundColor: series.map((_, i) => pointColor[pointKind(i)]),
@@ -2557,11 +2629,49 @@ function updateChart(range) {
         fill: false,
       },
     ];
+    // Ferienfläche auch im Gesamtverlauf (Nutzer-Anforderung 26.08.2026: "graue Fläche
+    // wie bei Jahresverlauf auch auf Gesamtverlauf anzeigen") - dieselbe Logik wie in
+    // buildYearCompare() (Ø Bevölkerungs-Abwesenheit, invertiert, auf 80% der
+    // Umsatz-Spitze normiert), nur pro WOCHE statt pro Monat gemittelt, weil "Gesamt"
+    // wochenweise Datenpunkte zeigt statt Monatswerten.
+    if (series.length) {
+      const holidayByWeek = series.map((p, i) => {
+        const startIso = (p.weekStart || "").slice(0, 10);
+        if (!startIso) return 0;
+        const nextIso = series[i + 1]?.weekStart ? series[i + 1].weekStart.slice(0, 10) : null;
+        const spanDays = nextIso ? Math.max(1, Math.round((new Date(nextIso) - new Date(startIso)) / 86400000)) : 7;
+        let sum = 0;
+        for (let d = 0; d < spanDays; d++) {
+          const day = new Date(startIso + "T00:00:00Z");
+          day.setUTCDate(day.getUTCDate() + d);
+          sum += frPopulationFractionOn(day.toISOString().slice(0, 10));
+        }
+        return sum / spanDays;
+      });
+      const validRevenue = series.map((p) => p.eur ?? 0).filter((v) => v !== null && v !== undefined);
+      const revenueMax = validRevenue.length ? Math.max(...validRevenue) : 0;
+      const holidayCeiling = revenueMax * 0.8;
+      datasets.unshift({
+        label: "Bevölkerungsanwesenheit (Kontext, kein belegter Zusammenhang)",
+        data: holidayByWeek.map((h) => (1 - h) * holidayCeiling),
+        borderColor: "transparent",
+        backgroundColor: "rgba(154, 160, 199, 0.16)",
+        borderWidth: 0,
+        pointRadius: 0,
+        pointHoverRadius: 0,
+        tension: 0.35,
+        fill: "origin",
+      });
+      document.getElementById("holidayAreaHint")?.classList.remove("hidden");
+    }
     chartType = "line";
   } else {
     currentSeasonalHints = {};
     currentHolidayHints = {};
     currentNewsHints = {};
+    // archiveYearMatch kommt von oben (Funktionsscope) - "year-2025" etc. nutzen
+    // dieselbe buildYearCompare()-Logik wie "yearly", nur mit explizitem Zieljahr statt
+    // immer dem neuesten.
     const cmp =
       range === "daily"
         ? buildDayCompare(latestData.history?.intraday ?? [], latestData.readoutTimeWeekly, latestData.history?.daily ?? [])
@@ -2569,7 +2679,7 @@ function updateChart(range) {
         ? buildWeekCompare(latestData.history?.daily ?? [], 0, latestData.history?.intraday ?? [], latestData.readoutTimeWeekly, latestData.history?.weekly ?? [])
         : range === "monthly"
         ? buildMonthCompare(latestData.history?.daily ?? [])
-        : buildYearCompare(latestData.history?.monthly ?? []);
+        : buildYearCompare(latestData.history?.monthly ?? [], archiveYearMatch ? archiveYearMatch[1] : undefined);
 
     // Balkendiagramm neben der Linie - Inhalt je nach Ansicht (Nutzer-Feedback
     // 20.08.2026): in "Tag" das Tagesumsatz-Balkendiagramm der aktuellen Woche (mit
@@ -2641,9 +2751,11 @@ function updateChart(range) {
       if (sideBarChart) sideBarChart.canGoBack = !!buildMonthlyBars(latestData, barChartOffset + 1);
     }
 
-    if (range === "yearly") {
+    if (range === "yearly" || archiveYearMatch) {
       // Zeigt immer alle Jahre - kein "Fenster", das sich verschieben liesse, daher
-      // hier keine Pfeil-Navigation (canGoBack bleibt false).
+      // hier keine Pfeil-Navigation (canGoBack bleibt false). Auch fuer archivierte
+      // Jahres-Tabs (Nutzer-Anforderung 26.08.2026) - derselbe Jahresvergleichs-Balken
+      // gibt Kontext, welches Jahr gerade betrachtet wird.
       sideBarChart = buildYearlyBars(latestData);
       if (sideBarChart) sideBarChart.canGoBack = false;
     }
@@ -2743,8 +2855,11 @@ function updateChart(range) {
       // statistisch tragfähigen Zusammenhang (Chat 25.08.2026), deshalb bewusst
       // zurückhaltend eingefärbt statt reißerisch. Als erstes Dataset eingefügt
       // (unshift), damit sie hinter den Umsatzlinien gezeichnet wird.
-      if (range === "yearly" && cmp.holidayByMonth) {
-        const validRevenue = [...cmp.thisValues, ...cmp.lastValues].filter((v) => v !== null && v !== undefined);
+      if ((range === "yearly" || archiveYearMatch) && cmp.holidayByMonth) {
+        // cmp.lastValues kann bei archivierten Jahres-Tabs ohne Vorjahresdaten null
+        // sein (aeltestes bekanntes Jahr, siehe buildYearCompare()) - Spread darauf
+        // wuerde sonst werfen.
+        const validRevenue = [...cmp.thisValues, ...(cmp.lastValues ?? [])].filter((v) => v !== null && v !== undefined);
         const revenueMax = validRevenue.length ? Math.max(...validRevenue) : 0;
         const holidayCeiling = revenueMax * 0.8;
         datasets.unshift({
@@ -2797,7 +2912,7 @@ function updateChart(range) {
   // zeigen den USD-Zaehler (GesamtwertUSD, siehe buildDayCompare/buildWeekCompare/
   // buildMonthCompare), Jahr/Gesamt die EUR-Auszahlungswerte (buildYearCompare/
   // history.weekly.eur) - daher zwei unterschiedliche Einheiten statt einer fixen.
-  const chartUnitFmt = range === "yearly" || range === "total" ? fmtEurAxis : fmtUsdAxis;
+  const chartUnitFmt = range === "yearly" || range === "total" || archiveYearMatch ? fmtEurAxis : fmtUsdAxis;
 
   if (chart) chart.destroy();
   // X-Achse: normalerweise Kategorie-Achse (ein Slot pro Label), in der Wochenansicht
@@ -2831,7 +2946,16 @@ function updateChart(range) {
         // eigener sinnvoller Zahl zum Ablesen.
         legend: {
           display: datasets.length > 1,
-          labels: { filter: (item) => !String(item.text || "").startsWith("Bevölkerungsanwesenheit") },
+          // "Gesamtumsatz" zusaetzlich ausgeblendet (Bugfix 26.08.2026, durch die neue
+          // Ferienflaeche im Gesamtverlauf aufgedeckt: die Legende war vorher wegen
+          // datasets.length<=1 unsichtbar, zeigte nach dem 2. Dataset - der
+          // Ferienflaeche - aber ploetzlich "undefined", weil die Gesamt-Linie selbst
+          // nie ein label hatte. Nutzer-Feedback: "am besten das Feld weglassen, weil
+          // ja klar ist, dass das der Gesamtverlauf ist").
+          labels: {
+            filter: (item) =>
+              !String(item.text || "").startsWith("Bevölkerungsanwesenheit") && item.text !== "Gesamtumsatz",
+          },
         },
         dailyAnchorLine: { positions: dailyAnchorLines, label: dailyAnchorLabel },
         // Saisonale Hinweise + Ferien-/Branchennews-Info-Punkte als Tooltip-
@@ -2884,7 +3008,7 @@ function updateChart(range) {
   const nextBtn = document.getElementById("barChartNextBtn");
   if (sideBarChart) {
     dailyBarWrap.classList.remove("hidden");
-    dailyBarWrap.style.width = range === "yearly" ? "25%" : "33%";
+    dailyBarWrap.style.width = range === "yearly" || archiveYearMatch ? "25%" : "33%";
     document.getElementById("dailyBarTitle").textContent = sideBarChart.title || "";
     // Pfeil-Navigation: "◂" nur aktiv, wenn weitere Historie existiert; "▸" nur
     // aktiv, wenn bereits zurueckgeblaettert wurde (zurueck zur Gegenwart).
