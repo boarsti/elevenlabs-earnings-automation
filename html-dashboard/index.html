@@ -800,9 +800,28 @@ let currentSeasonalHints = {}; // dataIndex -> Hinweistext, nur in der "Gesamt"-
 let currentHolidayHints = {}; // dataIndex -> Ferien-Hinweistext, nur in der "Gesamt"-Ansicht befuellt
 let currentNewsHints = {}; // dataIndex -> Branchennews-Hinweistext, nur in der "Gesamt"-Ansicht befuellt
 
+// Bugfix (26.08.2026, Nutzer-Feedback: "jetzt ist kein Refresh möglich"): fetch() hatte
+// bisher KEIN Timeout - haengt die Bridge-Verbindung (das haben wir in dieser Session
+// selbst mehrfach live gesehen, teils 10-20+ Sekunden "pending"), haengt jeder Aufrufer
+// unbegrenzt mit, allen voran der Refresh-Button (siehe refreshBtn-Handler unten, der
+// sich bis zum Ende der Kette selbst deaktiviert). FETCH_TIMEOUT_MS begrenzt das hart.
+const FETCH_TIMEOUT_MS = 25 * 1000;
+async function fetchWithTimeout(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } catch (e) {
+    if (e.name === "AbortError") throw new Error(`Bridge antwortet nicht innerhalb von ${FETCH_TIMEOUT_MS / 1000}s`);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchData() {
   const url = `${BRIDGE_URL}?token=${encodeURIComponent(BRIDGE_TOKEN)}`;
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url);
   const data = await res.json();
   if (data.error) throw new Error(data.error);
   return data;
@@ -814,7 +833,7 @@ async function fetchData() {
 // nicht in den Skripteigenschaften gesetzt).
 async function triggerCollector() {
   const url = `${BRIDGE_URL}?token=${encodeURIComponent(BRIDGE_TOKEN)}&action=triggerCollector`;
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url);
   const data = await res.json();
   return !!data.ok;
 }
@@ -1981,7 +2000,23 @@ function buildWeekCompare(daily, weekOffset = 0, intraday = [], readoutTimeWeekl
   const lastYearAnchorIso = lastYearAnchorDate.toISOString().slice(0, 10);
   const lastYearAnchorRawIdx = sorted.findIndex((r) => r.date === lastYearAnchorIso);
   const lastYearStartIdx = lastYearAnchorRawIdx >= 0 ? snapToRealReset(lastYearAnchorRawIdx) : -1;
-  const lastYearWeek = lastYearStartIdx >= 0 ? sorted.slice(lastYearStartIdx, lastYearStartIdx + len) : null;
+  // Bugfix 26.08.2026 (Nutzer-Feedback: "das Vorjahr wird immer noch versetzt
+  // angezeigt"): die Vorjahreswoche endete laut WeeklyHistory 2025 nach genau 7 Tagen
+  // 1 Minute (18.08.2025 05:53 UTC -> 25.08.2025 05:54 UTC) - kuerzer als die aktuell
+  // laufende Woche (bereits Tag 9, noch kein Reset). Ohne Begrenzung zog die Slice
+  // blind "len" Tage durch und haengte damit unbemerkt Tag 0/1 der NAECHSTEN
+  // Vorjahreswoche (48 $, 79 $ ab 25./26.08.2025) als vermeintliche Fortsetzung an -
+  // das erzeugte den sichtbaren Knick/Versatz am Ende der Linie. Deshalb wie bei
+  // thisWeek/lastWeek auch hier beim naechsten echten Reset abschneiden.
+  const lastYearNextResetIdx = (() => {
+    if (lastYearStartIdx < 0) return sorted.length;
+    for (let idx = lastYearStartIdx + 1; idx < sorted.length; idx++) {
+      if (Number(sorted[idx].usd || 0) < Number(sorted[idx - 1].usd || 0)) return idx;
+    }
+    return sorted.length;
+  })();
+  const lastYearWeek =
+    lastYearStartIdx >= 0 ? sorted.slice(lastYearStartIdx, Math.min(lastYearStartIdx + len, lastYearNextResetIdx)) : null;
   // Vorwoche nach Tagen SEIT DEM JEWEILS EIGENEN Rollover ausrichten, nicht nach
   // Wochentag (Nutzer-Klarstellung 26.08.2026, nach einem ersten - falschen -
   // Versuch mit Wochentag-Ausrichtung: "der direkte Vergleich [ist], dass der
@@ -3446,29 +3481,49 @@ updateRangeButtonLabels();
 // GitHub-Token bleibt dabei ausschliesslich in Apps Script), wartet dann die geschaetzte
 // Laufzeit ab (Checkout + npm install + Playwright-Install + Scrape) und holt danach
 // automatisch den frischen Wert von der Bridge.
+// Bugfix (26.08.2026, Nutzer-Feedback: "jetzt ist kein Refresh möglich"): btn.disabled
+// wurde bisher nur am Ende des Happy Path zurueckgesetzt - haengt triggerCollector()
+// oder tick() (z.B. durch eine haengende Bridge-Verbindung), blieb der Button fuer
+// immer deaktiviert, ohne Fehlermeldung. Jetzt in try/finally: egal was schiefgeht,
+// der Button wird garantiert wieder freigegeben.
 document.getElementById("refreshBtn").addEventListener("click", async () => {
   const btn = document.getElementById("refreshBtn");
   const label = document.getElementById("lastDataPointLabel");
   btn.disabled = true;
   btn.style.opacity = "0.4";
-  let triggered = false;
   try {
-    triggered = await triggerCollector();
-  } catch (e) {
-    console.error("Konnte Collector nicht auslösen:", e);
-  }
-  if (triggered) {
-    const waitSec = 75; // grobe Schaetzung: Checkout+npm install+Playwright+Scrape
-    for (let remaining = waitSec; remaining > 0; remaining--) {
-      label.textContent = `Collector läuft… Aktualisierung in ${remaining}s`;
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+    let triggered = false;
+    try {
+      triggered = await triggerCollector();
+    } catch (e) {
+      console.error("Konnte Collector nicht auslösen:", e);
+      label.textContent = "Collector nicht erreichbar – hole trotzdem aktuellsten Stand…";
     }
-  } else {
-    label.textContent = "Collector konnte nicht gestartet werden – hole trotzdem aktuellsten Stand…";
+    if (triggered) {
+      const waitSec = 75; // grobe Schaetzung: Checkout+npm install+Playwright+Scrape
+      for (let remaining = waitSec; remaining > 0; remaining--) {
+        label.textContent = `Collector läuft… Aktualisierung in ${remaining}s`;
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    } else if (label.textContent.indexOf("nicht erreichbar") < 0) {
+      label.textContent = "Collector konnte nicht gestartet werden – hole trotzdem aktuellsten Stand…";
+    }
+    await tick();
+  } finally {
+    btn.disabled = false;
+    btn.style.opacity = "1";
   }
-  await tick();
-  btn.disabled = false;
-  btn.style.opacity = "1";
+});
+
+// Bugfix (26.08.2026, Nutzer-Feedback: "immer wenn ich den Rechner verlasse, der
+// Bildschirmschoner anspringt, ich zurueckkomme, ist der Datenpunkt der letzte vor dem
+// Verlassen"): setInterval() wird von Browsern (v.a. Chrome/macOS) in inaktiven Tabs
+// gedrosselt und waehrend System-Standby komplett angehalten - er "holt" verpasste
+// Ticks nach dem Aufwachen nicht nach, sondern zaehlt einfach weiter. Deshalb zusaetzlich
+// sofort neu laden, sobald der Tab/Bildschirm wieder sichtbar wird (Standard-Pattern
+// gegen Timer-Drosselung), statt nur auf den naechsten 15-Minuten-Tick zu warten.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") tick();
 });
 
 tick();
