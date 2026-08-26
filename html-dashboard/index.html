@@ -1840,13 +1840,24 @@ function buildDayCompare(intraday, readoutTimeWeeklyIso, daily) {
       minute: "2-digit",
     })
   );
+  // Neben dem Wert auch den ECHTEN Messzeitpunkt je Slot mitfuehren (Nutzer-Feedback
+  // 26.08.2026: "oben links steht 19:33, im Graphen aber 19:29 - warum?"): das 15-
+  // Minuten-Raster ist am taeglichen Ablesezeitpunkt (11:59) verankert, nicht an vollen
+  // Uhrzeiten - ein Messwert um 19:33 landet dadurch im naechstgelegenen Slot "19:29",
+  // rein eine Rundung fuers Raster, kein zweiter abweichender Messwert. timestamps[]
+  // haelt den echten ISO-Zeitstempel pro befuelltem Slot, damit der Tooltip die exakte
+  // Uhrzeit zusaetzlich zeigen kann (siehe tooltip.callbacks.label in updateChart).
   const bucketByOffset = (pts, start) => {
-    const arr = Array(SLOT_COUNT).fill(null);
+    const values = Array(SLOT_COUNT).fill(null);
+    const timestamps = Array(SLOT_COUNT).fill(null);
     pts.forEach((p) => {
       const i = Math.round((new Date(p.ts).getTime() - start) / SLOT_MS);
-      if (i >= 0 && i < SLOT_COUNT) arr[i] = p.usd;
+      if (i >= 0 && i < SLOT_COUNT) {
+        values[i] = p.usd;
+        timestamps[i] = p.ts;
+      }
     });
-    return arr;
+    return { values, timestamps };
   };
   // Vorjahres-Referenzpunkt: echte Stundenwerte von vor einem Jahr existieren nicht
   // (Intraday-Erfassung startete erst 18.08.2026) - stattdessen der damalige
@@ -1857,10 +1868,14 @@ function buildDayCompare(intraday, readoutTimeWeeklyIso, daily) {
   const lastYearIso = lastYearDate.toISOString().slice(0, 10);
   const lastYearEntry = (daily || []).find((d) => d.date === lastYearIso);
 
+  const thisBucket = bucketByOffset(thisWindow, windowStart);
+  const lastBucket = lastWindow.length ? bucketByOffset(lastWindow, prevWindowStart) : null;
   return {
     labels,
-    thisValues: bucketByOffset(thisWindow, windowStart),
-    lastValues: lastWindow.length ? bucketByOffset(lastWindow, prevWindowStart) : null,
+    thisValues: thisBucket.values,
+    thisTimestamps: thisBucket.timestamps,
+    lastValues: lastBucket ? lastBucket.values : null,
+    lastTimestamps: lastBucket ? lastBucket.timestamps : null,
     lastYearRefValue: lastYearEntry ? lastYearEntry.usd : null,
     lastYearLabel: lastYearEntry
       ? `Vorjahr (Tageswert ${lastYearIso.slice(8, 10)}.${lastYearIso.slice(5, 7)}.)`
@@ -2597,6 +2612,9 @@ function updateChart(range) {
   let weeklyAnchorFraction = 0;
   let dailyAnchorLines = null;
   let dailyAnchorLabel = null;
+  // Echte Messzeitpunkte je Slot, nur in der Tagesansicht befuellt (Nutzer-Feedback
+  // 26.08.2026, siehe tooltip.callbacks.label unten).
+  let dailyRealTimestamps = null;
 
   if (range === "total") {
     // "Gesamt": voller Verlauf seit Beginn der Aufzeichnung, ohne Vergleichslinie.
@@ -2762,6 +2780,9 @@ function updateChart(range) {
 
     if (cmp) {
       labels = cmp.labels;
+      if (range === "daily") {
+        dailyRealTimestamps = { this: cmp.thisTimestamps, last: cmp.lastTimestamps };
+      }
       // Nutzer-Entscheidung 21.08.2026 (nach laengerer Klaerung, siehe Chat): x-Achse
       // im Wochenchart bleibt kalendertag-verankert (0:00-Raster, Datumslabel =
       // Kalendertag), die Datenpunkte selbst sitzen aber NICHT auf der 0:00-Linie,
@@ -2980,6 +3001,28 @@ function updateChart(range) {
                 currentNewsHints[context.dataIndex],
                 currentHolidayHints[context.dataIndex],
               ].filter(Boolean);
+              // Echte Uhrzeit des Messpunkts zusaetzlich anzeigen (Nutzer-Feedback
+              // 26.08.2026: "oben links 19:33, im Graphen 19:29 - warum?"): das 15-Min-
+              // Raster ist am Ablesezeitpunkt verankert, nicht an vollen Uhrzeiten - der
+              // Punkt selbst sitzt deshalb auf einem gerundeten Slot, der Tooltip zeigt
+              // hier zusaetzlich den exakten Messzeitpunkt.
+              if (range === "daily" && dailyRealTimestamps) {
+                const tsArr =
+                  context.dataset.label === "Heute (ab Ablesezeit)"
+                    ? dailyRealTimestamps.this
+                    : context.dataset.label === "Vortag (gleicher Zeitraum)"
+                    ? dailyRealTimestamps.last
+                    : null;
+                const realTs = tsArr ? tsArr[context.dataIndex] : null;
+                if (realTs) {
+                  const realTime = new Date(realTs).toLocaleTimeString("de-DE", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                  });
+                  parts.push(`genau: ${realTime}`);
+                }
+              }
               return parts.length ? parts.join("\n").split("\n") : undefined;
             },
           },
@@ -3649,6 +3692,31 @@ document.getElementById("refreshBtn").addEventListener("click", async () => {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") tick();
 });
+// Zusaetzlich auf Fenster-Fokus reagieren (Nutzer-Feedback 26.08.2026, "schon wieder
+// ... nach Bildschirmsperre wieder veraltete Daten"): visibilitychange allein reicht
+// nicht - bei einer reinen Bildschirmsperre (Screensaver/Passwortsperre, kein echter
+// Tab-Wechsel) bleibt der Tab aus Browser-Sicht oft die ganze Zeit "sichtbar" (die
+// Page Visibility API bildet den Bildschirm-/Sperrzustand des Betriebssystems nicht
+// zuverlaessig ab), das Event feuert also gar nicht erst.
+window.addEventListener("focus", tick);
+
+// Robustere Wach-Erkennung unabhaengig von visibilitychange/focus (Nutzer-Feedback
+// 26.08.2026, weiterhin veraltete Daten trotz der beiden Listener oben): waehrend
+// echtem System-Standby wird die komplette JS-Ausfuehrung angehalten, nicht nur
+// setInterval(tick, ...) - auch DIESER Kontroll-Timer haette also selbst einfach
+// pausiert und wuerde nach dem Aufwachen normal weiterlaufen, ohne dass irgendein
+// Event feuert. Deshalb stattdessen die WIRKLICH vergangene Zeit zwischen zwei
+// Kontrollen messen: laeuft die Lücke deutlich groesser als das Kontrollintervall
+// selbst, kann das nur durch eine Pause (Standby, starke Drosselung) entstanden sein -
+// dann sofort neu laden statt auf den naechsten reguleren 15-Minuten-Tick zu warten.
+const WAKE_CHECK_INTERVAL_MS = 20 * 1000;
+let lastWakeCheckMs = Date.now();
+setInterval(() => {
+  const now = Date.now();
+  const gap = now - lastWakeCheckMs;
+  lastWakeCheckMs = now;
+  if (gap > WAKE_CHECK_INTERVAL_MS * 3) tick();
+}, WAKE_CHECK_INTERVAL_MS);
 
 tick();
 setInterval(tick, POLL_INTERVAL_MS);

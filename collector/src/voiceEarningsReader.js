@@ -13,12 +13,20 @@
 //     Time,voice_id,voice_name,<Earnings|Characters> - eine Zeile pro Tag pro Stimme.
 //     Das ist die einzige gefundene Quelle mit taggenauer Pro-Stimme-Aufschluesselung;
 //     keine oeffentliche API dafuer vorhanden.
-//   - Granularitaet-Dropdown des CHARTS schaltet zwar bei langen Zeitraeumen auf
-//     "Weekly" um - der CSV-EXPORT bleibt davon aber unberuehrt und liefert weiterhin
-//     eine Zeile pro Tag pro Stimme (verifiziert 25.08.2026 per "Last 3 years": 493
-//     Zeilen mit echten Tagesdaten von 2025-01-30 bis heute, keine Wochen-Buckets).
-//     Der frueher hier dokumentierte gegenteilige Verdacht war falsch - "Last 3 years"
-//     ist daher fuer ein einmaliges Backfill sicher nutzbar, siehe range-Parameter.
+//   - KORREKTUR (26.08.2026, per Datenanalyse der echten Sheet-Werte widerlegt): die
+//     hier bis 25.08.2026 stehende Behauptung "CSV-Export liefert bei 'Last 3 years'
+//     trotzdem echte Tagesdaten" war FALSCH. Tatsaechlich liefert der Export fuer
+//     "Last 3 years" nur eine Zeile PRO WOCHE (immer donnerstags, exakter 7-Tage-
+//     Abstand) - erst ab dem Datum des ERSTEN taeglichen "30d"-Collector-Laufs
+//     (26.07.2026) liegen echte Tagesdaten vor. Nachweis: in VoiceEarningsDaily
+//     springen die Datumsabstaende fuer jede Stimme exakt am 26.07.2026 von 7 auf 1
+//     Tag um (Chat-Analyse 26.08.2026, Anlass: auffaellige "April-Spitzen" bei
+//     Alexander, die sich als Wochen- statt Tageswerte herausstellten). Folge: jede
+//     Auswertung, die einen EINZELNEN TAG vor dem 26.07.2026 isoliert betrachten will
+//     (z.B. "an welchem Tag genau war der Peak"), ist fuer diesen Zeitraum nicht
+//     moeglich - der jeweilige Wochenwert ist die feinste verfuegbare Aufloesung.
+//     Monats-/Wochenvergleiche ueber diesen Zeitraum bleiben aber gueltig, da
+//     durchgaengig dieselbe Granularitaet gilt.
 //   - Ein Promo-Popup ("Platform switch has moved") kann kurzzeitig ueber dem
 //     Export-Button liegen und Klicks abfangen - wird defensiv aus dem DOM entfernt.
 
