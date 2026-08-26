@@ -314,7 +314,20 @@ function computeWeekOverWeek(daily, weeklySorted, todayIso, intradaySorted) {
   const thisWeekStart = Utilities.formatDate(new Date(thisWeekRolloverIso), "Europe/Berlin", "yyyy-MM-dd");
   const lastWeekStart = Utilities.formatDate(new Date(lastWeekRolloverIso), "Europe/Berlin", "yyyy-MM-dd");
   const daysElapsed = daysBetweenIso(thisWeekStart, todayIso);
-  const lastWeekSameOffsetDate = addDaysIso(lastWeekStart, daysElapsed);
+  // Gedeckelter Vergleichszeitpunkt (Nutzer-Entscheidung 26.08.2026, "v1" nach
+  // gemeinsamer Analyse): Wochen sind unterschiedlich lang (beobachtet: 7-9 Tage,
+  // ElevenLabs' Auszahlungsrhythmus ist nicht fix). Ohne Deckel wuerde der Offset
+  // "Tage seit Wochenstart" ueber das Ende der Vorwoche hinausschiessen, sobald die
+  // laufende Woche laenger ist als die Vorwoche war - es gibt dort schlicht keine
+  // Daten mehr fuer "denselben Tag X", der Code fiel bisher auf einen fast
+  // bedeutungslosen Randwert zurueck (beobachtet: 29,98 $ statt der plausiblen
+  // vollen Vorwochensumme, siehe Chat-Analyse 26.08.2026). Deckel: sobald "Tage seit
+  // Wochenstart" die TATSAECHLICHE Laenge der Vorwoche erreicht/uebersteigt, ist die
+  // komplette Vorwochen-Endsumme der fairste verfuegbare Vergleichswert - innerhalb
+  // der kuerzeren der beiden Wochenlaengen bleibt es weiterhin exakt stundengenau.
+  const lastWeekDurationDays = daysBetweenIso(lastWeekStart, thisWeekStart);
+  const cappedDaysElapsed = Math.min(daysElapsed, Math.max(0, lastWeekDurationDays - 1));
+  const lastWeekSameOffsetDate = addDaysIso(lastWeekStart, cappedDaysElapsed);
   // Stundengenaue Rekonstruktion via Intraday-Messwerte (Nutzer-Anforderung
   // 21.08.2026: "das muss genau auf die Stunde abgestimmt sein, sonst verwirrt dieser
   // Wert" - bisher war der Vergleich nur tagesgenau: "heute" (live) gegen den
@@ -327,7 +340,8 @@ function computeWeekOverWeek(daily, weeklySorted, todayIso, intradaySorted) {
     if (!intradaySorted || !intradaySorted.length) return null;
     const thisRolloverMs = new Date(thisWeekRolloverIso).getTime();
     const lastRolloverMs = new Date(lastWeekRolloverIso).getTime();
-    const elapsedMs = Date.now() - thisRolloverMs;
+    const lastWeekDurationMs = thisRolloverMs - lastRolloverMs;
+    const elapsedMs = Math.min(Date.now() - thisRolloverMs, lastWeekDurationMs);
     const targetMs = lastRolloverMs + elapsedMs;
     const firstIntradayMs = new Date(intradaySorted[0].ts).getTime();
     if (lastRolloverMs < firstIntradayMs || targetMs < firstIntradayMs) return null;
@@ -343,11 +357,19 @@ function computeWeekOverWeek(daily, weeklySorted, todayIso, intradaySorted) {
   // 21.08.2026: "Vorwoche —" trotz vorhandener Historie; Ursache war eine leere
   // WochenumsatzUSD-Zelle fuer genau den Offset-Tag, 12.08.2026, vermutlich aus der
   // Uebergangsphase zur 11:59-Anker-Umstellung).
-  function findValidRow(targetIso) {
+  // maxIso (Nutzer-Feedback 26.08.2026): das +/-2-Tage-Suchfenster konnte trotz
+  // Deckelung (s.o.) zurueck auf den Rollover-Tag der Vorwoche "abrutschen", wenn das
+  // der einzige Tag im Fenster mit einem gueltigen Wert war - dadurch blieb der
+  // degenerierte Randwert (29,98 $) bestehen, obwohl der Zieltag korrekt gedeckelt
+  // wurde. maxIso verhindert das: Kandidaten NACH der Vorwochen-Grenze werden
+  // uebersprungen, die Suche darf also nur noch rueckwaerts in die Vorwoche
+  // ausweichen, nie vorwaerts darueber hinaus.
+  function findValidRow(targetIso, maxIso) {
     for (let delta = 0; delta <= 2; delta++) {
       const signs = delta === 0 ? [0] : [-1, 1];
       for (const sign of signs) {
         const candidateIso = addDaysIso(targetIso, delta * sign);
+        if (maxIso && candidateIso > maxIso) continue;
         const row = daily.find((r) => r.Datum === candidateIso);
         if (row && row.WochenumsatzUSD !== "" && row.WochenumsatzUSD !== undefined && row.WochenumsatzUSD !== null) {
           return row;
@@ -379,7 +401,23 @@ function computeWeekOverWeek(daily, weeklySorted, todayIso, intradaySorted) {
       }
     }
     if (resetIdx < 0) return null;
-    const targetIdx = resetIdx + offsetDays;
+    // NEU (Nutzer-Feedback 26.08.2026, dritte Fundstelle desselben Grundproblems):
+    // der NOMINELLE WeeklyHistory-Zeitstempel kann (wie schon beim Wochenstart oben)
+    // bis zu 1 Tag vom tatsaechlichen Reset abweichen - "offsetDays Tage weiter" kann
+    // dadurch trotz Deckelung im Aufrufer exakt auf/hinter den NAECHSTEN echten Reset
+    // (= das tatsaechliche Ende dieser rekonstruierten Woche) fallen und einen fast
+    // bedeutungslosen Delta-Wert liefern (beobachtet: 6,98 $ = 89,98-83, weil der
+    // Zielindex direkt auf den naechsten Reset-Tag traf, statt auf den letzten Tag
+    // DAVOR). Deshalb hier zusaetzlich den naechsten echten Reset selbst suchen und
+    // targetIdx hart davor deckeln.
+    let nextResetIdx = sortedDaily.length;
+    for (let idx = resetIdx + 1; idx < sortedDaily.length; idx++) {
+      if (Number(sortedDaily[idx].GesamtwertUSD || 0) < Number(sortedDaily[idx - 1].GesamtwertUSD || 0)) {
+        nextResetIdx = idx;
+        break;
+      }
+    }
+    const targetIdx = Math.min(resetIdx + offsetDays, nextResetIdx - 1);
     if (targetIdx < resetIdx || targetIdx >= sortedDaily.length) return null;
     const baselineVal = Number(sortedDaily[resetIdx].GesamtwertUSD || 0);
     const targetVal = Number(sortedDaily[targetIdx].GesamtwertUSD || 0);
@@ -388,10 +426,10 @@ function computeWeekOverWeek(daily, weeklySorted, todayIso, intradaySorted) {
   }
   let lastVal = preciseLastVal();
   if (lastVal === null) {
-    const lastRow = findValidRow(lastWeekSameOffsetDate);
+    const lastRow = findValidRow(lastWeekSameOffsetDate, addDaysIso(thisWeekStart, -1));
     lastVal = lastRow ? Number(lastRow.WochenumsatzUSD || 0) : 0;
     if (!lastRow || lastVal === 0) {
-      const reconstructed = reconstructWeekCumulative(lastWeekStart, daysElapsed);
+      const reconstructed = reconstructWeekCumulative(lastWeekStart, cappedDaysElapsed);
       if (reconstructed === null || reconstructed <= 0) return null;
       lastVal = reconstructed;
     }
@@ -401,7 +439,7 @@ function computeWeekOverWeek(daily, weeklySorted, todayIso, intradaySorted) {
   return {
     pct: round2(((thisVal - lastVal) / lastVal) * 100),
     lastWeekUsd: round2(lastVal),
-    lastWeekAvgDailyUsd: round2(lastVal / (daysElapsed + 1)),
+    lastWeekAvgDailyUsd: round2(lastVal / (cappedDaysElapsed + 1)),
   };
 }
 // Bugfix (21.08.2026, Nutzer-Korrektur am Feld6-Label "Vergleich zu TT.MM.2025" statt

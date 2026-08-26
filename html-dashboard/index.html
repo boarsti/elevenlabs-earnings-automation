@@ -346,7 +346,7 @@
                Feedback 21.08.2026: "IN den EUR-Werten darf kein Zeilenumbruch sein"). -->
           <div class="flex items-baseline gap-2" style="flex-wrap: wrap;">
             <p id="thisWeekEur" class="text-xl font-medium font-num" style="white-space: nowrap;">—</p>
-            <span id="thisWeekPct" class="text-xs font-num font-semibold"></span>
+            <span id="thisWeekPct" class="text-xs font-num font-medium"></span>
           </div>
           <p id="thisWeekEurPrev" class="text-xl font-medium font-num" style="white-space: nowrap;">&nbsp;</p>
         </div>
@@ -548,7 +548,7 @@
         <div class="flex items-center justify-between gap-3 flex-wrap">
           <div class="flex items-center gap-2 flex-wrap">
             <span class="muted text-sm">
-              <span id="frTodayCount" class="font-num font-semibold text-amber">–</span>
+              <span id="frTodayCount" class="font-num font-medium text-amber">–</span>
               von 16 Bundesländern heute in Ferien
               <span id="frPopPct" class="font-num">&nbsp;</span>
             </span>
@@ -1866,17 +1866,39 @@ function buildWeekCompare(daily, weekOffset = 0, intraday = [], readoutTimeWeekl
     .map((dateStr) => sorted.findIndex((r) => r.date === dateStr))
     .filter((i) => i >= 0);
   if (!anchorIdx.length) return null; // noch gar kein Ankertag bekannt
+  // Anker-Korrektur (Bugfix 26.08.2026, Nutzer-Feedback: "siehst du nicht, dass die
+  // blaue und orangene Linie nicht am gleichen Stichtag starten?"): der offiziell in
+  // WeeklyHistory hinterlegte Ankertag kann bis zu 1 Tag VOR dem tatsaechlichen Reset
+  // liegen (dieselbe Unschaerfe wie bei reconstructWeekCumulative() in Code.gs, Feld2 -
+  // z.B. war der offizielle Anker "10.08.", der GesamtwertUSD faellt aber erst am
+  // "11.08." tatsaechlich ab; der 10.08. gehoert noch zur VORHERIGEN Woche). Ohne diese
+  // Korrektur beginnt die Vorwoche-Linie einen Tag zu frueh mit einem "fremden",
+  // deutlich zu hohen Wert. Im Fenster [-1, +2] Tage um den offiziellen Anker nach dem
+  // ersten echten Wertabfall suchen (GesamtwertUSD < Vortag) und dorthin snappen.
+  const snapToRealReset = (idx) => {
+    for (let d = -1; d <= 2; d++) {
+      const candidateIdx = idx + d;
+      if (
+        candidateIdx > 0 &&
+        candidateIdx < sorted.length &&
+        Number(sorted[candidateIdx].usd || 0) < Number(sorted[candidateIdx - 1].usd || 0)
+      ) {
+        return candidateIdx;
+      }
+    }
+    return idx;
+  };
   const weekIdx = anchorIdx.length - 1 - weekOffset;
   if (weekIdx < 0) return null; // weiter zurueckgeblaettert als Anker bekannt sind
-  const thisStart = anchorIdx[weekIdx];
-  const thisEndExclusive = weekIdx + 1 < anchorIdx.length ? anchorIdx[weekIdx + 1] : sorted.length;
+  const thisStart = snapToRealReset(anchorIdx[weekIdx]);
+  const thisEndExclusive = weekIdx + 1 < anchorIdx.length ? snapToRealReset(anchorIdx[weekIdx + 1]) : sorted.length;
   const thisWeek = sorted.slice(thisStart, thisEndExclusive);
   // Vorwoche fehlt, solange nur EIN Anker bekannt ist (aktuell der Fall wegen der
   // Datenluecke Aug 1-17, siehe CHANGELOG) - "diese Woche" wird trotzdem gezeigt,
   // Vorwoche-Linie/-Werte bleiben dann einfach leer (Nutzer-Feedback 21.08.2026: "das
   // Koordinatensystem soll IMMER am Schnitttag anfangen" - durfte nicht an der
   // fehlenden Vorwoche scheitern).
-  const lastWeek = weekIdx >= 1 ? sorted.slice(anchorIdx[weekIdx - 1], thisStart) : null;
+  const lastWeek = weekIdx >= 1 ? sorted.slice(snapToRealReset(anchorIdx[weekIdx - 1]), thisStart) : null;
   // Dynamisch statt fest 7 (Nutzer-Feedback 21.08.2026: "muss links das
   // Koordinatensystem 8 Tage zeigen, sonst hat man keinen Vergleich, wenn der Tag
   // sofort verschwindet") - die echte Ablesezeit-Kadenz liegt nicht immer exakt bei 7
@@ -1917,27 +1939,58 @@ function buildWeekCompare(daily, weekOffset = 0, intraday = [], readoutTimeWeekl
   // Vorjahres-Zeile (2025) auf den allerersten (chronologisch aeltesten) Intraday-
   // Messwert von 2026 "matchen", weil der zeitlich nach JEDER 2025-Grenze liegt -
   // Bugfix (21.08.2026), der urspruenglich die Vorjahreslinie faelschlich komplett
-  // flach gezeichnet hat.
+  // flach gezeichnet hat. Bugfix (26.08.2026, durch den Wochentag-Ausrichtung-Fix
+  // fuer die Vorwoche-Linie aufgedeckt): ein reiner Zeitabstand reichte nicht -
+  // der letzte Vorwochen-Tag (17.08., direkt vor Beginn der Intraday-Erfassung am
+  // 18.08.) lag mit seinem Ende noch innerhalb der 2-Tage-Marge zum allerersten
+  // Intraday-Messwert ueberhaupt und "borgte" sich dadurch faelschlich den
+  // Tageswert von HEUTE (18.08.) statt seines eigenen (341 $ statt 86 $). Deshalb
+  // zusaetzlich verlangen, dass der gefundene Messwert wirklich auf denselben
+  // Kalendertag (Europe/Berlin) faellt wie row.date - der reine Zeitabstand bleibt
+  // nur als zusaetzliche Sicherung bestehen.
   const MAX_INTRADAY_MATCH_GAP_MS = 2 * 24 * 60 * 60 * 1000;
   const valueAtDayStart = (row) => {
     if (!row) return null;
     const boundaryMs = dayBoundaryMs(row.date);
     if (boundaryMs !== null) {
       const firstSample = sortedIntraday.find((p) => new Date(p.ts).getTime() >= boundaryMs);
-      if (firstSample && new Date(firstSample.ts).getTime() - boundaryMs <= MAX_INTRADAY_MATCH_GAP_MS) {
-        return firstSample.usd;
+      if (firstSample) {
+        const sampleMs = new Date(firstSample.ts).getTime();
+        const sampleDateBerlin = new Date(firstSample.ts).toLocaleDateString("en-CA", { timeZone: "Europe/Berlin" });
+        if (sampleMs - boundaryMs <= MAX_INTRADAY_MATCH_GAP_MS && sampleDateBerlin === row.date) {
+          return firstSample.usd;
+        }
       }
     }
     return row.usd ?? null;
   };
-  // Vorjahr: die Woche mit Ankertag exakt 364 Tage (52 Wochen) vor dieser Woche -
+  // Vorjahr: die Woche mit Ankertag ca. 364 Tage (52 Wochen) vor dieser Woche -
   // gleiche Wochentag-Ausrichtung, damit die Punkte vergleichbar sind (Nutzer-Feedback
-  // 19.08.2026: "Vorjahr dagegenstellen, um Trend abzuleiten").
+  // 19.08.2026: "Vorjahr dagegenstellen, um Trend abzuleiten"). Bugfix 26.08.2026
+  // (Nutzer-Feedback: "das Vorjahr muss optisch mit dem 18.08. dieses Jahres
+  // gleichgezogen werden"): 364 Tage sind nur 52 KALENDERWOCHEN, aber zwischen zwei
+  // Terminen im August liegen (ausser bei einem dazwischenliegenden Schaltjahr-Feb.)
+  // tatsaechlich 365 Tage - die reine 364-Tage-Rechnung landet deshalb regelmaessig
+  // einen Tag NACH dem eigentlich vergleichbaren Datum. Deshalb auch hier mit
+  // snapToRealReset() auf den naechsten echten Reset in der Naehe einrasten, statt der
+  // reinen Kalenderrechnung blind zu vertrauen (Beispiel: 364-Tage-Formel traf
+  // "19.08.2025" mit 91 $, der tatsaechliche Reset der Vorjahreswoche war aber bereits
+  // am "18.08.2025" mit 52 $).
   const lastYearAnchorDate = new Date(thisWeek[0].date + "T00:00:00Z");
   lastYearAnchorDate.setUTCDate(lastYearAnchorDate.getUTCDate() - 364);
   const lastYearAnchorIso = lastYearAnchorDate.toISOString().slice(0, 10);
-  const lastYearStartIdx = sorted.findIndex((r) => r.date === lastYearAnchorIso);
+  const lastYearAnchorRawIdx = sorted.findIndex((r) => r.date === lastYearAnchorIso);
+  const lastYearStartIdx = lastYearAnchorRawIdx >= 0 ? snapToRealReset(lastYearAnchorRawIdx) : -1;
   const lastYearWeek = lastYearStartIdx >= 0 ? sorted.slice(lastYearStartIdx, lastYearStartIdx + len) : null;
+  // Vorwoche nach Tagen SEIT DEM JEWEILS EIGENEN Rollover ausrichten, nicht nach
+  // Wochentag (Nutzer-Klarstellung 26.08.2026, nach einem ersten - falschen -
+  // Versuch mit Wochentag-Ausrichtung: "der direkte Vergleich [ist], dass der
+  // Start 18.8. 11:59 mit dem neuen Datum+Uhrzeit gleich startet"). Index i
+  // bedeutet also fuer beide Linien "i Tage nach dem eigenen Wochenanfang" - lastWeek[i]
+  // ist bereits so indiziert (lastWeek[0] = Vorwoche-Rollovertag), das ist exakt die
+  // Konvention, die die x-Achse laut Nutzer-Entscheidung 21.08.2026 ohnehin hat
+  // ("x-Achse bleibt kalendertag-verankert an DIESER Woche", die anderen Linien sind
+  // bewusst Tag-N-Ueberlagerungen, kein Wochentag-Abgleich).
   return {
     labels,
     thisValues: Array.from({ length: len }, (_, i) => valueAtDayStart(thisWeek[i])),
