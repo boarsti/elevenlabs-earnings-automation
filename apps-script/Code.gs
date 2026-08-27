@@ -420,6 +420,15 @@ function computeWeekOverWeek(daily, weeklySorted, todayIso, intradaySorted) {
     const targetIdx = Math.min(resetIdx + offsetDays, nextResetIdx - 1);
     if (targetIdx < resetIdx || targetIdx >= sortedDaily.length) return null;
     const baselineVal = Number(sortedDaily[resetIdx].GesamtwertUSD || 0);
+    // Bugfix (26.08.2026, aufgedeckt direkt nach einem frischen Rollover, Nutzer-
+    // Feedback: "Feld2+3 sind Quatsch"): faellt targetIdx (offsetDays=0, also der
+    // allererste Tag der Vorwoche) auf denselben Index wie resetIdx, ergab
+    // "targetVal - baselineVal" bisher IMMER 0 - eine Differenz mit sich selbst,
+    // nicht der tatsaechliche Tag-0-Wert. baselineVal IST bereits die erste
+    // POST-Reset-Ablesung (per Definition von resetIdx), also selbst schon die
+    // richtige Antwort fuer "Wochenumsatz am Tag 0" - keine weitere Subtraktion
+    // noetig oder sinnvoll.
+    if (targetIdx === resetIdx) return baselineVal > 0 ? baselineVal : null;
     const targetVal = Number(sortedDaily[targetIdx].GesamtwertUSD || 0);
     const delta = targetVal - baselineVal;
     return delta >= 0 ? delta : null;
@@ -666,16 +675,6 @@ const EMAIL_FONT_NUM = "'IBM Plex Mono',ui-monospace,monospace";
 // - fuer den Wiedererkennungswert 1:1 aus der dortigen Base64-Kodierung uebernommen.
 const EMAIL_LOGO_DATA_URI = "data:image/png;base64,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";
 
-// Montag-verankerter ISO-Wochenschluessel, identisch zu isoWeekKey() im Dashboard
-// (html-dashboard/index.html) - Basis fuer den woechentlichen Tagesumsatz-Chart im
-// Email-Report weiter unten.
-function isoWeekKeyGs(dateStr) {
-  const d = new Date(dateStr + "T00:00:00Z");
-  const dayOffset = (d.getUTCDay() + 6) % 7; // Mo=0 ... So=6
-  d.setUTCDate(d.getUTCDate() - dayOffset);
-  return d.toISOString().slice(0, 10);
-}
-
 // Durchschnitt TagesumsatzUSD je Wochentag (0=So...6=Sa), identisch zu
 // computeWeekdayAverages() im Dashboard - Basis fuer die Monats-Hochrechnung.
 function computeWeekdayAveragesGs(daily) {
@@ -690,30 +689,41 @@ function computeWeekdayAveragesGs(daily) {
   return sums.map((s, i) => (counts[i] ? s / counts[i] : null));
 }
 
-// Hochrechnung des laufenden Monats, identisch zu computeMonthProjection() im
+// Bugfix (27.08.2026, Nutzer-Feedback direkt nach einem frischen Rollover: "Dieser
+// Monat (EUR) 1.094,31 € ... Prognose bis Monatsende: ~1.015,18 € - die Prognose kann
+// ja so nicht stimmen"): die alte Version rechnete die Monatssumme KOMPLETT
+// UNABHAENGIG aus den taeglichen USD-Werten neu hoch (Summe aller Tage x aktueller
+// FX-Kurs) statt auf dem echten, aus den Auszahlungszeilen stammenden thisMonthEur
+// aufzusetzen. Das driftet auseinander, weil thisMonthEur auf ECHTEN EUR-Auszahlungen
+// beruht (die eine ganze Wochen-Auszahlung an IHREM Rollover-Tag als Klumpensumme
+// zaehlen, siehe buildPeriodAggregate), waehrend die taegliche USD-Summe die gleiche
+// Woche glatt ueber die Tage verteilt - direkt nach einem Rollover kann die
+// unabhaengig gerechnete "Prognose" dadurch sogar UNTER dem bereits feststehenden
+// Ist-Wert liegen (rechnerisch unmoeglich fuer eine Prognose "bis Monatsende").
+// Jetzt stattdessen: thisMonthEur (echt, autoritativ) + Schaetzwert NUR fuer Tage OHNE
+// eigene echte Daten (= die verbleibenden Tage bis Monatsende) - garantiert dadurch
+// per Konstruktion Prognose >= Ist. Identisch zu computeMonthProjection() im
 // Dashboard (Nutzer-Anforderung 20.08.2026, 2. Runde: "liefere die Monatsprognose
 // mit, bis Monatsende, dann neu generieren") - wird bei jedem Mailversand live neu
 // berechnet (kein gespeicherter Zustand), daher automatisch korrekt nach jedem
 // Monatswechsel.
-function computeMonthProjectionGs(daily, year, month) {
+function computeMonthProjectionEurGs(daily, year, month, thisMonthEur, fxRateUsdEur) {
   const avgs = computeWeekdayAveragesGs(daily);
   const withVal = daily.filter((d) => d.tagesumsatzUsd !== null && d.tagesumsatzUsd !== undefined);
   const fallback = withVal.length ? withVal.reduce((a, d) => a + d.tagesumsatzUsd, 0) / withVal.length : 0;
   const byDate = {};
   daily.forEach((d) => { byDate[d.date] = d; });
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  let sum = 0;
+  let remainingUsd = 0;
   for (let day = 1; day <= daysInMonth; day++) {
     const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     const row = byDate[iso];
-    if (row && row.tagesumsatzUsd !== null && row.tagesumsatzUsd !== undefined) {
-      sum += row.tagesumsatzUsd;
-    } else {
-      const wd = new Date(iso + "T00:00:00Z").getUTCDay();
-      sum += avgs[wd] !== null && avgs[wd] !== undefined ? avgs[wd] : fallback;
-    }
+    if (row && row.tagesumsatzUsd !== null && row.tagesumsatzUsd !== undefined) continue; // schon in thisMonthEur enthalten
+    const wd = new Date(iso + "T00:00:00Z").getUTCDay();
+    remainingUsd += avgs[wd] !== null && avgs[wd] !== undefined ? avgs[wd] : fallback;
   }
-  return sum;
+  const remainingEur = fxRateUsdEur ? remainingUsd * fxRateUsdEur : 0;
+  return thisMonthEur + remainingEur;
 }
 
 // Einfache proportionale Jahres-Hochrechnung, identisch zur Formel im Dashboard
@@ -729,34 +739,47 @@ function computeYearProjectionGs(thisYearEur) {
   return thisYearEur * (daysInYear / daysElapsed);
 }
 
-// Tagesumsatz-Balken der aktuellen (Montag-verankerten) Kalenderwoche - identisch
-// zum Chart "Tagesumsatz (diese Woche)" in der Tag-Ansicht des Dashboards
-// (buildWeekCompare -> thisWeekDailyUsd in html-dashboard/index.html). Nutzer-
-// Anforderung 20.08.2026, 2. Runde: "liefere in der Mail den Graphen mit, der bei
-// Tag (Do 20.08.) die ganze Woche vollstaendig generiert wurde" - reine Ist-Werte
-// fuer die bereits vergangenen Tage, keine erfundene Prognose-Ueberlagerung
-// (identisch zum Original-Chart im Dashboard).
-function buildCurrentWeekDailyUsdGs(daily) {
-  const byWeek = {};
-  (daily || []).forEach((p) => {
-    const wk = isoWeekKeyGs(p.date);
-    (byWeek[wk] = byWeek[wk] || []).push(p);
+// Bugfix (27.08.2026, Nutzer-Feedback direkt nach einem frischen Rollover: "das Feld
+// Tagesumsatz in der Email muss den gesamten letzten Abrechnungszyklus zeigen. Nicht
+// die Tage einer Kalenderwoche, die angebrochen ist."): die alte Version gruppierte
+// nach Montag-verankerter KALENDERwoche (isoWeekKeyGs) - direkt nach einem Rollover
+// zeigte das deshalb nur die 1-2 Tage der gerade erst begonnenen Kalenderwoche statt
+// des kompletten letzten Abrechnungszyklus. Jetzt stattdessen ueber den echten
+// Abrechnungszyklus-Anker (isWeekAnchor, identisch zur anchorIdx-Logik in
+// buildWeekCompare() im Dashboard) UND immer den LETZTEN VOLLSTAENDIGEN Zyklus
+// zeigen (nie den gerade erst laufenden) - das ist der Zyklus, ueber den der
+// woechentliche Report ohnehin inhaltlich berichtet.
+function snapToRealResetGs(sorted, idx) {
+  for (let d = -1; d <= 2; d++) {
+    const candidateIdx = idx + d;
+    if (
+      candidateIdx > 0 &&
+      candidateIdx < sorted.length &&
+      Number(sorted[candidateIdx].usd || 0) < Number(sorted[candidateIdx - 1].usd || 0)
+    ) {
+      return candidateIdx;
+    }
+  }
+  return idx;
+}
+function buildLastCompleteWeekDailyUsdGs(daily) {
+  const sorted = [...(daily || [])].sort((a, b) => (a.date < b.date ? -1 : 1));
+  const anchorIdx = sorted
+    .map((r, i) => (r.isWeekAnchor ? i : -1))
+    .filter((i) => i >= 0)
+    .map((i) => snapToRealResetGs(sorted, i));
+  if (anchorIdx.length < 2) return null; // noch keine vollstaendig abgeschlossene Vorwoche bekannt
+  const lastCompleteStart = anchorIdx[anchorIdx.length - 2];
+  const lastCompleteEndExclusive = anchorIdx[anchorIdx.length - 1];
+  const week = sorted.slice(lastCompleteStart, lastCompleteEndExclusive);
+  if (!week.length) return null;
+  const dayNamesSun = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+  const labels = week.map((r) => {
+    const d = new Date(r.date + "T00:00:00Z");
+    return `${dayNamesSun[d.getUTCDay()]} ${String(d.getUTCDate()).padStart(2, "0")}.${String(d.getUTCMonth() + 1).padStart(2, "0")}.`;
   });
-  const weekKeys = Object.keys(byWeek).sort();
-  if (!weekKeys.length) return null;
-  const thisWeekKey = weekKeys[weekKeys.length - 1];
-  const thisWeek = byWeek[thisWeekKey];
-  const dayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-  const labels = dayNames.map((name, i) => {
-    const d = new Date(thisWeekKey + "T00:00:00Z");
-    d.setUTCDate(d.getUTCDate() + i);
-    return `${name} ${String(d.getUTCDate()).padStart(2, "0")}.${String(d.getUTCMonth() + 1).padStart(2, "0")}.`;
-  });
-  const values = dayNames.map((_, i) => {
-    const row = thisWeek[i];
-    return row && row.tagesumsatzUsd !== null && row.tagesumsatzUsd !== undefined ? row.tagesumsatzUsd : null;
-  });
-  return { labels, values };
+  const values = week.map((r) => (r.tagesumsatzUsd !== null && r.tagesumsatzUsd !== undefined ? r.tagesumsatzUsd : null));
+  return { labels, values, weekStartIso: week[0].date };
 }
 
 // Rendert den Tagesumsatz-Balken der aktuellen Woche als PNG (Apps-Script-
@@ -765,7 +788,7 @@ function buildCurrentWeekDailyUsdGs(daily) {
 // direkt sichtbar im Mailtext). Farben identisch zum Dashboard-Akzent (amber
 // #FF8A1F), Hintergrund identisch zum dunklen CI-Kartenhintergrund der Mail.
 function buildWeeklyChartBlob(daily) {
-  const week = buildCurrentWeekDailyUsdGs(daily);
+  const week = buildLastCompleteWeekDailyUsdGs(daily);
   if (!week) return null;
   const dataTable = Charts.newDataTable()
     .addColumn(Charts.ColumnType.STRING, "Tag")
@@ -774,12 +797,13 @@ function buildWeeklyChartBlob(daily) {
     const v = week.values[i];
     dataTable.addRow([label, v === null || v === undefined ? 0 : v]);
   });
+  const weekStartLabel = Utilities.formatDate(new Date(week.weekStartIso), "Europe/Berlin", "dd.MM.yyyy");
   const chart = Charts.newColumnChart()
     .setDataTable(dataTable.build())
     .setDimensions(600, 260)
     .setColors([EMAIL_COLOR_TREND_UP])
     .setBackgroundColor(EMAIL_COLOR_CARD_BG)
-    .setTitle("Tagesumsatz (diese Woche)")
+    .setTitle(`Tagesumsatz (letzter Abrechnungszyklus ab ${weekStartLabel})`)
     .setOption("titleTextStyle", { color: EMAIL_COLOR_TEXT, fontSize: 14 })
     .setOption("hAxis", { textStyle: { color: EMAIL_COLOR_MUTED } })
     .setOption("vAxis", { textStyle: { color: EMAIL_COLOR_MUTED }, gridlines: { color: EMAIL_COLOR_CARD_BORDER } })
@@ -849,11 +873,16 @@ function sendWeeklyReportEmail() {
   const fmtEurDeltaGs = (n) => (n === null || n === undefined ? "—" : `${n >= 0 ? "▲ +" : "▼ −"}${deNumberFmtGs.format(Math.abs(n))} €`);
 
   const dailyHistory = data.history.daily || [];
-  const monthProjectionUsd = computeMonthProjectionGs(dailyHistory, new Date().getFullYear(), new Date().getMonth() + 1);
-  // Nutzer-Feedback 21.08.2026: "Prognose bis Monatsende muss in EUR umgerechnet
-  // werden" - dieselbe Umrechnung wie ueberall sonst im Report (data.fxRateUsdEur),
-  // damit die Monatsprognose direkt mit dem EUR-Ist-Wert darueber vergleichbar ist.
-  const monthProjectionEur = data.fxRateUsdEur ? monthProjectionUsd * data.fxRateUsdEur : null;
+  // Auf dem echten thisMonthEur aufsetzen statt unabhaengig neu zu rechnen (Bugfix
+  // 27.08.2026, siehe Kommentar bei computeMonthProjectionEurGs) - garantiert
+  // Prognose >= Ist.
+  const monthProjectionEur = computeMonthProjectionEurGs(
+    dailyHistory,
+    new Date().getFullYear(),
+    new Date().getMonth() + 1,
+    data.thisMonthEur,
+    data.fxRateUsdEur
+  );
   const yearProjectionEur = computeYearProjectionGs(data.thisYearEur);
   const weeklyChartBlob = buildWeeklyChartBlob(dailyHistory);
 
@@ -908,17 +937,25 @@ function sendWeeklyReportEmail() {
 
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:12px;">
         <tr>
+          <!-- Bugfix (27.08.2026, Nutzer-Feedback: "Diese Woche ist doch sinnlos, wenn
+               durch den neuen Startpunkt ohnehin immer 0,00 $ steht"): data.thisWeekUsdNet
+               ist strukturell IMMER nahe 0, weil diese Mail per Trigger exakt bei jedem
+               neuen Rollover verschickt wird (siehe maybeSendWeeklyReportEmail) - loest
+               sich also nie von selbst. Ersetzt durch zwei Werte, die genau dann, wenn
+               die Woche gerade erst begonnen hat, bereits vollstaendig und aussagekraeftig
+               feststehen: der neue Startwert (Feld2) und das Ø/Tag der JETZT abgerechneten
+               Vorwoche (Feld3, aus der bereits vorhandenen weekly[]-Ledger-Zahl
+               previousWeekPayout.avgPerDayEur - keine Neuberechnung noetig). -->
           <td class="stack-cell" width="33.33%" style="padding:0 4px 0 0;">
             <div style="background:${EMAIL_COLOR_CARD_BG};border:1px solid ${EMAIL_COLOR_CARD_BORDER};border-radius:10px;padding:10px;text-align:center;">
-              <p style="margin:0 0 2px;font-size:11px;font-weight:500;color:${EMAIL_COLOR_MUTED};">Diese Woche (USD)</p>
-              <p style="margin:0;font-family:${EMAIL_FONT_NUM};font-weight:700;font-size:15px;color:${EMAIL_COLOR_TEXT};">${fmtUsdGs(data.thisWeekUsdNet)}</p>
-              ${data.weekStartBalanceUsd ? `<p style="margin:3px 0 0;font-family:${EMAIL_FONT_NUM};font-size:10px;color:${EMAIL_COLOR_MUTED};">+ Startwert ${fmtUsdGs(data.weekStartBalanceUsd)}</p>` : ""}
+              <p style="margin:0 0 2px;font-size:11px;font-weight:500;color:${EMAIL_COLOR_MUTED};">Startwert (USD)</p>
+              <p style="margin:0;font-family:${EMAIL_FONT_NUM};font-weight:700;font-size:15px;color:${EMAIL_COLOR_TEXT};">${fmtUsdGs(data.weekStartBalanceUsd)}</p>
             </div>
           </td>
           <td class="stack-cell" width="33.33%" style="padding:0 4px;">
             <div style="background:${EMAIL_COLOR_CARD_BG};border:1px solid ${EMAIL_COLOR_CARD_BORDER};border-radius:10px;padding:10px;text-align:center;">
-              <p style="margin:0 0 2px;font-size:11px;font-weight:500;color:${EMAIL_COLOR_MUTED};">Ø pro Tag</p>
-              <p style="margin:0;font-family:${EMAIL_FONT_NUM};font-weight:700;font-size:15px;color:${EMAIL_COLOR_TEXT};">${fmtUsdGs(data.avgDailyUsd)}</p>
+              <p style="margin:0 0 2px;font-size:11px;font-weight:500;color:${EMAIL_COLOR_MUTED};">Ø pro Tag (Vorwoche)</p>
+              <p style="margin:0;font-family:${EMAIL_FONT_NUM};font-weight:700;font-size:15px;color:${EMAIL_COLOR_TEXT};">${fmtEurGs(previousWeekPayout ? previousWeekPayout.avgPerDayEur : null)}</p>
             </div>
           </td>
           <td class="stack-cell" width="33.33%" style="padding:0 0 0 4px;">
@@ -931,7 +968,7 @@ function sendWeeklyReportEmail() {
       </table>
 
       ${weeklyChartBlob ? `<div style="background:${EMAIL_COLOR_CARD_BG};border:1px solid ${EMAIL_COLOR_CARD_BORDER};border-radius:10px;padding:12px;margin-bottom:12px;text-align:center;">
-        <img src="cid:weeklyChart" alt="Tagesumsatz diese Woche" class="week-chart-img" width="576" style="display:block;width:100%;max-width:576px;height:auto;margin:0 auto;border-radius:6px;" />
+        <img src="cid:weeklyChart" alt="Tagesumsatz letzter Abrechnungszyklus" class="week-chart-img" width="576" style="display:block;width:100%;max-width:576px;height:auto;margin:0 auto;border-radius:6px;" />
       </div>` : ""}
 
       <div style="background:${EMAIL_COLOR_CARD_BG};border:1px solid ${EMAIL_COLOR_CARD_BORDER};border-radius:10px;padding:4px 16px;margin-bottom:12px;">
@@ -983,7 +1020,20 @@ function sendWeeklyReportEmail() {
   if (weeklyChartBlob) {
     mailOptions.inlineImages = { weeklyChart: weeklyChartBlob };
   }
+  // Diagnose-Logging (27.08.2026, Nutzer-Feedback: "email wurde nicht generiert, es
+  // kam nix an" - trotz sauberem Ausfuehrungsprotokoll ohne Fehler): protokolliert
+  // Empfaenger, Betreff und das verbleibende Tageskontingent VOR dem Versand, damit
+  // sich im Apps-Script-"Ausführungen"-Log (auf den Log-Eintrag klicken, nicht nur
+  // "Hinweis: abgeschlossen") nachvollziehen laesst, ob MailApp den Versand wirklich
+  // mit den erwarteten Werten aufgerufen hat.
+  Logger.log(
+    "sendWeeklyReportEmail: to=%s subject=%s remainingDailyQuota=%s",
+    recipient,
+    mailOptions.subject,
+    MailApp.getRemainingDailyQuota()
+  );
   MailApp.sendEmail(mailOptions);
+  Logger.log("sendWeeklyReportEmail: MailApp.sendEmail() ohne Ausnahme durchlaufen.");
 }
 
 // Prueft bei jedem Trigger-Tick, ob seit dem letzten Mailversand ein NEUER

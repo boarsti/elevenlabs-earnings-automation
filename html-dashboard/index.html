@@ -164,6 +164,37 @@
   @media (prefers-reduced-motion: reduce) {
     .ambient-bg .amb-blob { animation: none; }
   }
+
+  /* Vollflaechiges "beschlagene Scheibe"-Overlay bei veralteten Daten (Nutzer-
+     Anforderung 27.08.2026, statt/zusaetzlich zu den stillen Hintergrund-Retry-
+     Versuchen): erscheint NUR wenn data.stale true ist (siehe render() in
+     index.html) und verschwindet automatisch wieder, sobald ein Refresh
+     erfolgreich frische Daten bringt - kein manuelles Schliessen noetig. */
+  #staleOverlay {
+    position: fixed; inset: 0; z-index: 999;
+    display: none; align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+    background: rgba(245, 246, 250, 0.55);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    animation: staleOverlayFadeIn 0.35s ease;
+  }
+  #staleOverlay.visible { display: flex; }
+  @media (prefers-color-scheme: dark) {
+    #staleOverlay { background: rgba(11, 15, 43, 0.6); }
+  }
+  @keyframes staleOverlayFadeIn { from { opacity: 0; } to { opacity: 1; } }
+  #staleRefreshBtn {
+    width: 96px; height: 96px; border-radius: 50%; border: none; cursor: pointer;
+    background: #FF8A1F; color: #ffffff; font-size: 40px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 24px rgba(255, 138, 31, 0.45);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  #staleRefreshBtn:hover { transform: scale(1.06); box-shadow: 0 6px 30px rgba(255, 138, 31, 0.6); }
+  #staleRefreshBtn:active { transform: scale(0.96); }
+  #staleRefreshBtn.spinning { animation: staleRefreshSpin 0.8s linear infinite; }
+  @keyframes staleRefreshSpin { to { transform: rotate(360deg); } }
+  #staleOverlay .stale-label { color: var(--text); font-weight: 600; font-size: 1rem; }
+  #staleOverlay .stale-sublabel { color: var(--muted); font-size: 0.8rem; margin-top: -8px; }
 </style>
 </head>
 <body class="min-h-screen p-4">
@@ -172,6 +203,12 @@
     <span class="amb-blob amb-blob-a"></span>
     <span class="amb-blob amb-blob-b"></span>
     <span class="amb-blob amb-blob-c"></span>
+  </div>
+
+  <div id="staleOverlay" role="alertdialog" aria-label="Daten veraltet">
+    <button id="staleRefreshBtn" title="Daten jetzt neu laden">↻</button>
+    <p class="stale-label">Daten aktualisieren</p>
+    <p class="stale-sublabel" id="staleOverlaySublabel"></p>
   </div>
 
   <!-- ============================================================
@@ -1624,6 +1661,21 @@ function render(data) {
   lastDataPointEl.classList.toggle("text-amber-deep", data.stale);
   lastDataPointEl.classList.toggle("muted", !data.stale);
 
+  // Bugfix (27.08.2026, Nutzer-Rueckfrage: "das Overlay soll nach Standby ODER nach
+  // 15 Min Inaktivitaet kommen, macht das so Sinn?"): das Overlay NICHT mehr an
+  // data.stale koppeln - das ist ein rein SERVER-seitiges Signal (STALE_AFTER_MINUTES
+  // = 90 in Code.gs, misst nur ob der Collector selbst seit >90 Min lief) und haette
+  // nach einem Standby/Inaktivitaet praktisch nie ausgeloest: das zuletzt erfolgreich
+  // geladene data-Objekt traegt den data.stale-Wert VOM ZEITPUNKT DIESES FETCHES (meist
+  // false, weil der Collector ja normal weiterlief) - ob der eigene Tab seitdem selbst
+  // erfolgreich nachgeladen hat, sagt das gar nicht aus. Die eigentlich relevante Frage
+  // ("zeigt DIESER Tab noch aktuelle Werte?") wird stattdessen client-seitig ueber
+  // updateStaleOverlay()/lastSuccessfulFetchMs unten beantwortet (15-Min-Schwelle,
+  // per Intervall geprueft) - deckt Standby, Tab-Drosselung und reine Inaktivitaet
+  // gleichermassen ab, ohne "Standby" gesondert erkennen zu muessen (ueber
+  // visibilitychange/focus nie zuverlaessig moeglich, siehe Kommentare bei
+  // tickWithRetry unten).
+
   // EUR-Schaetzung des laufenden Wochen-USD-Werts zum aktuellen Kurs (Nutzer-
   // Feedback 19.08.2026) - der tatsaechliche EUR-Betrag steht erst nach der
   // woechentlichen Abrechnung fest, das hier ist nur eine Naeherung zum Live-Kurs.
@@ -2804,13 +2856,49 @@ function updateChart(range) {
           ? new Date(latestData.readoutTimeWeekly).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })
           : null;
       }
+      // Anteil des Tages (0..<1), der seit der zuletzt VERGANGENEN Ablesezeit bereits
+      // verstrichen ist - Basis fuer die Position des zusaetzlichen Live-Punkts unten.
+      const liveElapsedFractionToday = (readoutIso) => {
+        if (!readoutIso) return 0;
+        const readout = new Date(readoutIso);
+        const now = new Date();
+        const todayAnchor = new Date(now);
+        todayAnchor.setHours(readout.getHours(), readout.getMinutes(), readout.getSeconds(), 0);
+        let elapsedMs = now - todayAnchor;
+        if (elapsedMs < 0) {
+          todayAnchor.setDate(todayAnchor.getDate() - 1);
+          elapsedMs = now - todayAnchor;
+        }
+        return Math.min(elapsedMs / (24 * 60 * 60 * 1000), 0.999);
+      };
       const toXY = (arr) => arr.map((v, i) => ({ x: i + weeklyAnchorFraction, y: v === null || v === undefined ? null : v }));
       // Aktuelle Periode = Amber (durchgezogen, dick), Vorperiode = klares Blau
       // (duenner, gestrichelt) - deutlich unterscheidbar (Nutzer-Feedback 18.08.2026).
+      const thisWeekXY = weeklyTimeAxis ? toXY(cmp.thisValues) : cmp.thisValues;
+      // Zusaetzlicher Live-Punkt (Bugfix 27.08.2026, Nutzer-Feedback: "es fehlt jetzt
+      // der tatsaechliche Startpunkt und die Linie zum neu angezeigten Datenpunkt - es
+      // muss taeglich immer 2 Punkte geben: den finalen Tageswert auf der Ankerlinie
+      // UND den aktuellen Datenpunkt davor"): mein vorheriger Versuch hat den
+      // BESTEHENDEN (bereits fest verankerten) letzten Punkt an die Live-Position
+      // verschoben - dadurch fehlte der eigentliche Ankerpunkt. Jetzt bleibt jeder
+      // Ankerpunkt fest auf seiner Linie (das ist der endgueltige Wert GENAU zur
+      // taeglichen Ablesezeit) und es kommt ein ZUSAETZLICHER Punkt fuer den noch
+      // laufenden, aktuellen Tag hinzu - verbunden per Linie vom letzten Ankerpunkt.
+      // Sobald die naechste taegliche Ablesezeit erreicht wird, wird aus diesem Live-
+      // Punkt automatisch (via naechstem buildWeekCompare()-Aufruf) ein neuer, fest
+      // verankerter Punkt - und ein neuer Live-Punkt entsteht fuer den Tag danach.
+      if (weeklyTimeAxis) {
+        const lastRealIdx = cmp.thisValues.reduce((acc, v, i) => (v !== null && v !== undefined ? i : acc), -1);
+        if (lastRealIdx >= 0 && lastRealIdx < cmp.thisValues.length - 1) {
+          const liveValue = (latestData.weekStartBalanceUsd ?? 0) + (latestData.thisWeekUsdNet ?? 0);
+          const liveX = lastRealIdx + weeklyAnchorFraction + liveElapsedFractionToday(latestData.readoutTimeWeekly);
+          thisWeekXY.splice(lastRealIdx + 1, 0, { x: liveX, y: liveValue });
+        }
+      }
       datasets = [
         {
           label: cmp.thisLabel,
-          data: weeklyTimeAxis ? toXY(cmp.thisValues) : cmp.thisValues,
+          data: thisWeekXY,
           borderColor: "#FF8A1F",
           backgroundColor: "#FF8A1F",
           borderWidth: 3,
@@ -3612,13 +3700,70 @@ function renderVoiceChart() {
   });
 }
 
+// Client-seitige Inaktivitaets-/Standby-Erkennung fuers Overlay (Nutzer-Anforderung
+// 27.08.2026: "nach Standby ODER nach mind. 15 Min Inaktivitaet soll der Refresh-
+// Button erscheinen") - unabhaengig vom SERVER-seitigen data.stale (siehe Kommentar
+// in render() oben). Ein Standby/laengere Inaktivitaet aeussert sich hier einzig
+// darin, dass tick() seit einer Weile nicht mehr ERFOLGREICH war - genau das wird
+// gemessen, ohne Standby als Ereignis gesondert erkennen zu muessen.
+const CLIENT_STALE_AFTER_MS = 15 * 60 * 1000;
+let lastSuccessfulFetchMs = Date.now();
+function updateStaleOverlay() {
+  const overlay = document.getElementById("staleOverlay");
+  const tooOld = Date.now() - lastSuccessfulFetchMs > CLIENT_STALE_AFTER_MS;
+  overlay.classList.toggle("visible", tooOld);
+  if (tooOld) {
+    const timePart = new Date(lastSuccessfulFetchMs).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    document.getElementById("staleOverlaySublabel").textContent = `Letzter Datenpunkt: ${timePart}`;
+  }
+}
+setInterval(updateStaleOverlay, 30 * 1000);
+
 async function tick() {
   try {
     render(await fetchData());
+    lastSuccessfulFetchMs = Date.now();
+    updateStaleOverlay();
+    return true;
   } catch (e) {
     console.error("Konnte Daten nicht laden:", e);
+    return false;
   }
 }
+
+// Bugfix (27.08.2026, Nutzer-Feedback: "immer noch so, dass die Datenpunkte ab dem
+// Moment nicht mehr laden, wo man den Rechner verlaesst" - trotz visibilitychange/
+// focus/Wach-Erkennung): der ALLERERSTE tick() direkt nach einem Standby-Ende kann
+// fehlschlagen, weil das Netzwerk (WLAN-Reconnect) noch einen Moment braucht, bevor
+// es wieder erreichbar ist - ohne Wiederholung blieb die Anzeige dann bis zum
+// naechsten reguleren 15-Minuten-Tick auf "veraltet" (orange ⚠️) haengen, selbst
+// wenn die Wach-Erkennung selbst korrekt ausgeloest hatte. tickWithRetry()
+// wiederholt bei einem Fehlschlag automatisch mit steigendem Abstand, statt nur
+// einmalig zu versuchen.
+async function tickWithRetry(delays = [5000, 10000, 20000]) {
+  const ok = await tick();
+  if (ok || !delays.length) return;
+  setTimeout(() => tickWithRetry(delays.slice(1)), delays[0]);
+}
+
+// Klick auf den grossen Overlay-Button (Nutzer-Anforderung 27.08.2026): bewusst
+// NUR ein Daten-Refresh (tickWithRetry), kein location.reload() - der Fehler war
+// nie eine kaputte Seite, nur ein veralteter Fetch; ein voller Seiten-Reload wuerde
+// Chart-Zoom/Scroll-Position verwerfen und unnoetig laenger dauern. Der Button
+// dreht sich waehrend des Ladens, damit sichtbar ist, dass etwas passiert - das
+// Overlay selbst blendet sich in render() automatisch aus, sobald data.stale
+// wieder false ist (kein separates "Schliessen" noetig).
+document.getElementById("staleRefreshBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("staleRefreshBtn");
+  btn.classList.add("spinning");
+  btn.disabled = true;
+  try {
+    await tickWithRetry();
+  } finally {
+    btn.classList.remove("spinning");
+    btn.disabled = false;
+  }
+});
 
 // Beschriftet die Zeitraum-Buttons mit dem konkreten aktuellen Zeitraum statt
 // generischer Begriffe (Nutzer-Feedback 18.08.2026: "Di 18.08." / "KW34" / "August"
@@ -3690,7 +3835,7 @@ document.getElementById("refreshBtn").addEventListener("click", async () => {
 // sofort neu laden, sobald der Tab/Bildschirm wieder sichtbar wird (Standard-Pattern
 // gegen Timer-Drosselung), statt nur auf den naechsten 15-Minuten-Tick zu warten.
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") tick();
+  if (document.visibilityState === "visible") tickWithRetry();
 });
 // Zusaetzlich auf Fenster-Fokus reagieren (Nutzer-Feedback 26.08.2026, "schon wieder
 // ... nach Bildschirmsperre wieder veraltete Daten"): visibilitychange allein reicht
@@ -3698,7 +3843,7 @@ document.addEventListener("visibilitychange", () => {
 // Tab-Wechsel) bleibt der Tab aus Browser-Sicht oft die ganze Zeit "sichtbar" (die
 // Page Visibility API bildet den Bildschirm-/Sperrzustand des Betriebssystems nicht
 // zuverlaessig ab), das Event feuert also gar nicht erst.
-window.addEventListener("focus", tick);
+window.addEventListener("focus", () => tickWithRetry());
 
 // Robustere Wach-Erkennung unabhaengig von visibilitychange/focus (Nutzer-Feedback
 // 26.08.2026, weiterhin veraltete Daten trotz der beiden Listener oben): waehrend
@@ -3715,8 +3860,28 @@ setInterval(() => {
   const now = Date.now();
   const gap = now - lastWakeCheckMs;
   lastWakeCheckMs = now;
-  if (gap > WAKE_CHECK_INTERVAL_MS * 3) tick();
+  if (gap > WAKE_CHECK_INTERVAL_MS * 3) tickWithRetry();
 }, WAKE_CHECK_INTERVAL_MS);
+
+// Letzte Absicherung (27.08.2026, Nutzer-Feedback: "Rechner 18:52 verlassen, zurueck
+// 22:12 - Chrome UND Safari zeigen noch 18:52", trotz visibilitychange/focus/Wach-
+// Timer oben): betrifft BEIDE Browser gleich - deutet darauf hin, dass die Tabs beim
+// Zurueckkommen zwar sichtbar, aber nicht wirklich FOKUSSIERT waren (z.B. mehrere
+// Fenster offen), wodurch weder visibilitychange noch focus ausgeloest haben. Deshalb
+// zusaetzlich auf JEDE Interaktion mit der Seite reagieren, nicht nur auf formale
+// Fokus-Events - das feuert garantiert, sobald wirklich wieder mit der Seite
+// gearbeitet wird. Gedrosselt (max. 1x/60s), damit normales Scrollen/Mausbewegen
+// keine Fetch-Flut ausloest.
+let lastInteractionCheckMs = 0;
+function onUserInteraction() {
+  const now = Date.now();
+  if (now - lastInteractionCheckMs < 60 * 1000) return;
+  lastInteractionCheckMs = now;
+  tickWithRetry();
+}
+["mousemove", "mousedown", "keydown", "scroll", "touchstart"].forEach((evt) =>
+  document.addEventListener(evt, onUserInteraction, { passive: true })
+);
 
 tick();
 setInterval(tick, POLL_INTERVAL_MS);
