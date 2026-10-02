@@ -1,33 +1,42 @@
 // Liest die ElevenLabs Voices-Earnings-Seite mit einer authentifizierten Session aus.
 //
-// Verifiziert per Live-Inspektion (18.08.2026) - die Seite zeigt (stabile Text-Anker):
-//   "Current Period"      -> "$78.79 USD"           (laufender, kurzfristiger USD-Wert)
-//   "All Time Payouts"    -> "€19133.13 EUR"
-//   Tabelle "History"     -> Zeilen: Date | Amount | Tax Withheld | Currency | Status
-//     Die JEWEILS AKTUELLE (laufende) Woche erscheint dort selbst als letzte Zeile
-//     mit Status "Pending", z.B. "8/18/26, 11:59 | €261.12 | €0.00 | eur | Pending".
-//     Das ist der Wert, der im Sheet manuell in Spalte J landet.
+// Seitenstruktur (verifiziert 18.08.2026, Selektoren angepasst 01.10.2026):
+//   Zwei Betrag-Karten (CSS p.text-sm.text-foreground.font-normal.tabular-nums.truncate):
+//     Index 0  -> "$351.80 USD"   (Current Period / Aktueller Zeitraum)
+//     Index 1  -> "€21099.39 EUR" (All Time Payouts / Auszahlungen insgesamt)
+//   Tabelle <table>  -> Zeilen: Datum | Betrag | Einbehaltene Steuer | Waehrung | Status
+//     Die laufende Woche erscheint als letzte Zeile mit Status "Pending"/"Ausstehend".
+//     Seit ca. 01.10.2026 liefert ElevenLabs die Seite in der Kontosprache - deshalb
+//     werden Selektoren auf CSS-Klassen statt auf englische Texte gestuetzt.
 
 const PAYOUTS_URL = "https://elevenlabs.io/app/voices-earnings/payouts";
+
+// ElevenLabs zeigt die Beträge (Current Period, All Time Payouts) in einem
+// stabilen CSS-Element – unabhängig von der Oberflächensprache des Kontos
+// (seit ca. 01.10.2026 kann die Seite in der Kontosprache erscheinen, z.B.
+// Deutsch). Die Klasse bleibt konstant, Position [0]=USD, [1]=EUR.
+const AMOUNT_SELECTOR = "p.text-sm.text-foreground.font-normal.tabular-nums.truncate";
 
 export async function readEarnings(page) {
   await page.goto(PAYOUTS_URL, { waitUntil: "domcontentloaded" });
 
   // Auf Hydration + Firestore-Live-Werte warten (siehe Design-Doku: Werte kommen
   // client-seitig per Realtime-Listener, nicht im initialen HTML).
-  await page.getByText("Current Period", { exact: true }).waitFor({ timeout: 30_000 });
+  // Sprachunabhaengig: warten auf den ersten Betrag-Container statt auf den
+  // englischen Text "Current Period" (Bugfix 01.10.2026: ElevenLabs liefert
+  // die Seite jetzt in der Kontosprache des eingeloggten Nutzers).
+  await page.locator(AMOUNT_SELECTOR).first().waitFor({ timeout: 30_000 });
   await page.waitForTimeout(3_000); // kurze Karenz, bis der Listener den echten Wert liefert
 
-  const currentPeriod = await readLabelledAmount(page, "Current Period");
-  const allTimePayouts = await readLabelledAmount(page, "All Time Payouts");
+  const currentPeriod = await readAmountByIndex(page, 0); // [0] = Current Period (USD)
+  const allTimePayouts = await readAmountByIndex(page, 1); // [1] = All Time Payouts (EUR)
   const history = await readHistoryTable(page);
 
   return { currentPeriod, allTimePayouts, history, scrapedAt: new Date().toISOString() };
 }
 
-async function readLabelledAmount(page, label) {
-  const container = page.getByText(label, { exact: true }).locator("..");
-  const text = await container.innerText();
+async function readAmountByIndex(page, index) {
+  const text = await page.locator(AMOUNT_SELECTOR).nth(index).innerText();
   return parseAmount(text);
 }
 
@@ -55,8 +64,8 @@ async function readHistoryTable(page) {
       .filter((cells) => cells.length >= 5);
   });
 
-  // Header-Zeile (Date/Amount/Tax Withheld/Currency/Status) verwerfen, falls vorhanden.
-  const dataRows = rows.filter((cells) => cells[0] !== "Date");
+  // Header-Zeile verwerfen (EN: "Date", DE: "Datum") - sprachunabhängig.
+  const dataRows = rows.filter((cells) => cells[0] !== "Date" && cells[0] !== "Datum");
 
   return dataRows.map(([date, amount, taxWithheld, currency, status]) => ({
     date,

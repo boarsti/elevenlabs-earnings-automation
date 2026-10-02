@@ -31,14 +31,21 @@
 //     Export-Button liegen und Klicks abfangen - wird defensiv aus dem DOM entfernt.
 
 const ANALYTICS_URL = "https://elevenlabs.io/app/voices-earnings/analytics";
-const RANGE_LABELS = { "30d": "Last 30 days", "3y": "Last 3 years" };
+// Seit 01.10.2026 liefert ElevenLabs die Seite in der Kontosprache (z.B. Deutsch).
+// Selektoren muessen beide Varianten abdecken.
+const RANGE_LABELS = {
+  "30d": /Last 30 days|Letzte 30 Tage/,
+  "3y": /Last 3 years|Letzte 3 Jahre/,
+};
 
 // range: "30d" (Standard, taeglicher Lauf - rollierendes Fenster, upsert baut Historie
 // inkrementell aus) oder "3y" (einmaliges Backfill - deckt die komplette bisher
 // verfuegbare Kontohistorie ab, siehe collectVoiceEarnings.js VOICE_EARNINGS_RANGE).
 export async function readVoiceEarnings(page, { range = "30d" } = {}) {
   await page.goto(ANALYTICS_URL, { waitUntil: "domcontentloaded" });
-  await page.getByText("Total Earnings", { exact: true }).waitFor({ timeout: 30_000 });
+  // Sprachunabhaengig: warten auf den ersten Tab via aria-controls (statt auf den
+  // englischen Text "Total Earnings" - Bugfix 01.10.2026 analog zu elevenlabsReader.js).
+  await page.locator('[role="tab"][aria-controls$="-content-earnings_tab"]').waitFor({ timeout: 30_000 });
   await page.waitForTimeout(1000);
 
   await setDateRange(page, range);
@@ -52,10 +59,11 @@ export async function readVoiceEarnings(page, { range = "30d" } = {}) {
 async function setDateRange(page, range) {
   const label = RANGE_LABELS[range];
   if (!label) throw new Error(`Unbekannter Zeitraum "${range}" - erwartet: ${Object.keys(RANGE_LABELS).join(", ")}`);
-  // Label ist z.B. "Last 7 days · UTC+2" als EIN Textknoten - ohne exact:true suchen.
-  await page.getByText("Last 7 days").click();
+  // Datumsbereich-Trigger: EN "Last 7 days" / DE "Letzte 7 Tage" (ohne exact, da
+  // " · UTC+2" als Suffix mitkommt). Bugfix 01.10.2026: Regex deckt beide Sprachen.
+  await page.getByText(/Last 7 days|Letzte 7 Tage/).click();
   await page.waitForTimeout(200);
-  await page.getByText(label, { exact: true }).click();
+  await page.getByText(label).click();
   await page.waitForTimeout(500);
 }
 
@@ -72,7 +80,8 @@ async function exportTabAsRows(page, tabId, valueColumnName) {
   await page.waitForTimeout(300);
   await removeInterferingPromo(page);
 
-  const exportBtn = page.locator('button[aria-label="Export"]');
+  // Export-Button: aria-label EN "Export" / DE "Exportieren" - Bugfix 01.10.2026.
+  const exportBtn = page.locator('button[aria-label="Export"], button[aria-label="Exportieren"]');
   await exportBtn.click();
   await page.waitForTimeout(300);
   const expanded = await exportBtn.getAttribute("aria-expanded");
@@ -82,7 +91,8 @@ async function exportTabAsRows(page, tabId, valueColumnName) {
 
   const [download] = await Promise.all([
     page.waitForEvent("download", { timeout: 15_000 }),
-    page.getByText("Export CSV", { exact: true }).click(),
+    // "Export CSV" / "CSV exportieren" - Regex deckt beide Sprachen.
+    page.getByText(/Export CSV|CSV exportieren/i).click(),
   ]);
   const stream = await download.createReadStream();
   const csv = await streamToString(stream);
