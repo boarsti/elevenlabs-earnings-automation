@@ -1,0 +1,31 @@
+name: Keep Alive
+
+# Verhindert, dass GitHub Scheduled Workflows nach 60 Tagen Repo-Inaktivitaet
+# deaktiviert. GitHub zaehlt nur Commits als "Aktivitaet" - Workflow-Laeufe allein
+# reichen nicht. Dieser Workflow laeuft am 1. jedes Monats und erzeugt einen
+# Mini-Commit, damit der 60-Tage-Zaehler nie ablaeuft.
+
+on:
+  schedule:
+    - cron: "0 9 1 * *" # 1. jedes Monats, 09:00 UTC
+  workflow_dispatch: {} # manuell ausloesbar, z.B. sofort nach Warnung
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Timestamp aktualisieren
+        run: |
+          echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > .github/keep-alive.txt
+
+      - name: Commit und Push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/keep-alive.txt
+          git commit -m "chore: keep-alive $(date -u '+%Y-%m')"
+          git push
